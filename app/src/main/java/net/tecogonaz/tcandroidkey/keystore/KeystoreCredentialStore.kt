@@ -81,9 +81,11 @@ class KeystoreCredentialStore(
         val alias = alias(id)
         val useStrongBox = preferStrongBox() && isStrongBoxAvailable
         val keyPair = try {
-            generateKeyPair(alias, useStrongBox)
-        } catch (e: StrongBoxUnavailableException) {
-            generateKeyPair(alias, false)
+            try {
+                generateKeyPair(alias, useStrongBox)
+            } catch (e: StrongBoxUnavailableException) {
+                generateKeyPair(alias, false)
+            }
         } catch (e: Exception) {
             // 画面ロック未設定などで鍵を生成できない
             throw CtapException(CtapStatus.ERR_OPERATION_DENIED, "key generation failed: ${e.message}")

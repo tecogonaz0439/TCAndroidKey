@@ -106,7 +106,7 @@ JCA ソフトウェア鍵で WebAuthn クライアント相当の署名検証ま
 - 短い APDU は 256 バイト、拡張長 APDU は 1024 バイトずつチェイニングして応答する
   (NFC コントローラによる長フレームの不具合を避けるため)。
 - CTAP 処理 (StrongBox 署名は数百 ms かかることがある) はワーカースレッドで行い、`sendResponseApdu` で応答する。
-- `apduservice.xml`: `requireDeviceUnlock=true`, `requireDeviceScreenOn=true`, category `other`。
+- `apduservice.xml`: `requireDeviceUnlock=true` (画面オフ時は OS 既定で HCE 無効), category `other`。
 
 ### 3.3 Bluetooth HID (実験的)
 
@@ -122,7 +122,7 @@ JCA ソフトウェア鍵で WebAuthn クライアント相当の署名検証ま
 ### 4.1 認証受付の条件 (AND)
 
 1. **アプリが前面表示中** (onStart〜onStop)。バックグラウンド・画面オフ・ロック中は受け付けない
-   (HCE 側でも `requireDeviceUnlock` / `requireDeviceScreenOn`)。
+   (HCE 側でも `requireDeviceUnlock`)。
 2. **本人確認済みで受付期限内** (既定 60 秒、15〜300 秒で設定可)。
 3. **ワンタイム** (既定 ON): 1 回の登録/認証 (UP を伴う操作) が成功した時点で受付を解除。
 4. 受付外に NFC リーダーを検出した場合は SELECT を拒否し、本人確認ダイアログを表示する
