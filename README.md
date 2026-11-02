@@ -1,53 +1,97 @@
+[日本語版はこちら](README-ja.md)
+
 # TCAndroidKey
 
-Android 端末を **FIDO2 (CTAP2) セキュリティキー** として振る舞わせる、**FIDO / FIDO2 Web アプリケーションのテスト用ツール**。
-PC や他の Android 端末の NFC リーダーに端末をかざして、開発中の Web アプリの WebAuthn (パスキー / 2 要素認証) の登録・認証を試験できる。
+**TCAndroidKey** is an Android app that turns an Android device into a **FIDO2 (CTAP 2.0) security key** for **testing web applications that use FIDO / FIDO2 (WebAuthn)**. Hold the device to an NFC reader connected to a PC (or to another Android device) to try passkey and security-key registration and sign-in on the web application you are developing.
 
-> **注意: テスト用途専用です。YubiKey などの物理セキュリティキーの代替としては使用しないでください。**
-> 本番サービスや重要なアカウントには登録しないでください。FIDO 認定は受けておらず、
-> アンインストール等で鍵が失われても復旧できません。詳細は [設計書](docs/design/README.md) を参照。
+> [!IMPORTANT]
+> **This app is a testing tool. Do not use it as a replacement for physical security keys such as YubiKey.**
+> Register it only with test accounts and test environments, not with production services or important accounts.
+> The app is not FIDO Certified, and keys cannot be backed up or recovered (uninstalling the app deletes them).
+> See the [Terms of Use](docs/TERMS.md) and the [Security Policy](SECURITY.md).
 
-- **NFC** (HCE によるカードエミュレーション) が主ターゲット。Bluetooth HID は実験的対応、USB は技術的に非対応
-- 秘密鍵は **Android Keystore (StrongBox / TEE)** 内で生成し、端末外へ出さない。個別削除・全削除に対応
-- **アプリ画面の表示中のみ**、かつ **指紋などで本人確認した直後のみ** 認証を受け付ける
-- **Google Play 開発者サービス不要** (業務用端末にも導入可能)
-- Android 15 以上 / Kotlin 2 / Jetpack Compose (Material 3)。UI は TCSameuraDamMonitor-android をベースにしている
+**This app is not provided, approved, or endorsed by the FIDO Alliance, Yubico, Google, or any other third party.**
 
-## 使い方
+## Features
 
-1. 端末に画面ロックと指紋を設定し、NFC をオンにする
-2. アプリを開いて「本人確認して開始」→ 指紋認証
-3. 「認証できます (残り NN 秒)」の間に、端末の背面を NFC リーダーにかざす
+- **FIDO2 security key over NFC** — Host-based card emulation (HCE) of the FIDO applet; CTAP 2.0 commands MakeCredential, GetAssertion, GetNextAssertion, GetInfo, Selection, and Reset (optional)
+- **Passkeys and non-discoverable credentials** — ES256 (ECDSA P-256), multiple accounts per site, `none` or packed self attestation
+- **Keys in the Android Keystore** — A private key is generated for each registration in StrongBox (or the TEE) and never leaves the device; delete keys individually or all at once
+- **Authentication only when you allow it** — Only while the app is on screen, only within a short window after fingerprint (or screen lock) verification, and by default only once per verification
+- **Event log** — Results of each registration and authentication (kept in memory only)
+- **No Google Play services** — Works on business devices without GMS; no internet permission
+- **Bluetooth HID (experimental)** — CTAPHID over the Bluetooth HID Device profile
+- **English and Japanese** — Including the per-app language setting
 
-## ドキュメント
+USB is not supported: an Android app cannot act as a USB HID device without root.
 
-| 文書 | 内容 |
-|---|---|
-| [docs/design/](docs/design/README.md) | 設計書一式 (基本設計・詳細設計・付録) |
-| [docs/CLOUD-BUILD.md](docs/CLOUD-BUILD.md) | クラウド (Claude Code on the web) での APK ビルド環境の設定 |
-| [docs/LOCAL-BUILD-macOS.md](docs/LOCAL-BUILD-macOS.md) | macOS + Android Studio でのローカルビルド |
-| [docs/TESTING.md](docs/TESTING.md) | Windows / macOS / Android での動作確認手順 |
+## Requirements
 
-## リポジトリ構成
+- Android 15 (API 35) or later, with NFC and host-based card emulation
+- A screen lock (and preferably a Class 3 biometric such as a fingerprint)
+- A client: for example, a Windows PC with a PC/SC NFC reader, or another Android device with NFC
 
-```
-fido-core/   FIDO2 プロトコル実装 (CBOR, CTAP2, NFC APDU, CTAPHID)。純 Kotlin、単体テスト付き
-app/         Android アプリ (Keystore, HCE サービス, Bluetooth HID, Compose UI)
-scripts/
-  cloud/     クラウド環境のセットアップスクリプト
-  cicd/      build-apk.sh / verify.sh / install-android.sh
-  test/      PC (PC/SC リーダー) からの動作確認スクリプト (python-fido2)
-docs/        設計・手順書
-```
+## How to Obtain
 
-## ビルド
+The app is not distributed through app stores or GitHub Releases yet. Build the APK from source:
 
 ```bash
 scripts/cicd/build-apk.sh
 ```
 
-出力: `build/cicd/apk/TCAndroidKey-debug.apk`
+The APK is written to `build/cicd/apk/TCAndroidKey-debug.apk`. See [Cloud build](docs/CLOUD-BUILD.md) or [Local build on macOS](docs/LOCAL-BUILD-macOS.md) for setting up the build environment.
 
-## ライセンス
+Debug builds are signed with a shared key published in this repository, so that you can update the app in place (uninstalling it deletes all keys). Because anyone can create an APK with the same signature, install only APKs that you built yourself or obtained directly from the developer.
 
-Apache License 2.0 ([LICENSE](LICENSE))
+## Usage
+
+1. Set a screen lock and a fingerprint on the device, and turn on NFC.
+2. Open the app and tap **Verify and start**, then verify with your fingerprint.
+3. While **Ready to authenticate** is shown, hold the back of the device to the NFC reader.
+
+See [Testing](docs/TESTING.md) for step-by-step checks on Windows, macOS, and Android, including a Python script based on [python-fido2](https://github.com/Yubico/python-fido2).
+
+## Compatibility
+
+| Client | Connection | Status |
+|---|---|---|
+| Windows 11 (Edge / Chrome) | NFC (PC/SC reader) | Expected to work; being tested |
+| python-fido2 2.0.0 (low-level `Ctap2`) | NFC (PC/SC reader) | Response format verified |
+| Android (Chrome) | NFC | Expected to work; being tested |
+| macOS (Chrome) | NFC | Not supported by the browser |
+| Windows / macOS browsers | Bluetooth HID | Experimental |
+
+Known limitations (no clientPIN, CTAP 2.0 only, no U2F, no extensions, and so on) are listed in the [design documents](docs/design/appendix/C_roadmap.md).
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [Design documents](docs/design/README.md) | Basic design, detailed design, and appendices (Japanese) |
+| [Cloud build](docs/CLOUD-BUILD.md) | Building the APK in a cloud environment (Japanese) |
+| [Local build on macOS](docs/LOCAL-BUILD-macOS.md) | Building with Android Studio on macOS (Japanese) |
+| [Testing](docs/TESTING.md) | Testing on Windows, macOS, and Android (Japanese) |
+
+## Repository
+
+- **GitHub**: [tecogonaz0439/TCAndroidKey](https://github.com/tecogonaz0439/TCAndroidKey)
+
+```
+fido-core/   FIDO2 protocol implementation (CBOR, CTAP2, NFC APDU, CTAPHID, authorization gate). Pure Kotlin with unit tests
+app/         Android app (Keystore, HCE service, Bluetooth HID, Compose UI)
+scripts/     Cloud setup, build / verify / install scripts, and test scripts (python-fido2)
+docs/        Design documents, build and test guides, terms of use, security policy
+```
+
+Please report issues and submit pull requests in this repository. Report vulnerabilities by email as described in the [Security Policy](SECURITY.md), not in public Issues.
+
+## Links
+
+- Terms of Use: [English](docs/TERMS.md) / [Japanese](docs/TERMS-ja.md)
+- Security Policy: [English](SECURITY.md) / [Japanese](docs/SECURITY-ja.md)
+
+## License
+
+The source code is licensed under the [Apache License, Version 2.0](LICENSE).
+
+The app's UI is based on [TCSameuraDamMonitor-android](https://github.com/tecogonaz0439/TCSameuraDamMonitor-android).
