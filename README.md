@@ -1,7 +1,11 @@
 # TCAndroidKey
 
-Android 端末を **FIDO2 (CTAP2) 物理セキュリティキー** (YubiKey 相当) として使うためのアプリ。
-PC や他の Android 端末の NFC リーダーに端末をかざして、WebAuthn (パスキー / 2 要素認証) にサインインできる。
+Android 端末を **FIDO2 (CTAP2) セキュリティキー** として振る舞わせる、**FIDO / FIDO2 Web アプリケーションのテスト用ツール**。
+PC や他の Android 端末の NFC リーダーに端末をかざして、開発中の Web アプリの WebAuthn (パスキー / 2 要素認証) の登録・認証を試験できる。
+
+> **注意: テスト用途専用です。YubiKey などの物理セキュリティキーの代替としては使用しないでください。**
+> 本番サービスや重要なアカウントには登録しないでください。FIDO 認定は受けておらず、
+> アンインストール等で鍵が失われても復旧できません。詳細は [設計書](docs/design/README.md) を参照。
 
 - **NFC** (HCE によるカードエミュレーション) が主ターゲット。Bluetooth HID は実験的対応、USB は技術的に非対応
 - 秘密鍵は **Android Keystore (StrongBox / TEE)** 内で生成し、端末外へ出さない。個別削除・全削除に対応
@@ -19,7 +23,7 @@ PC や他の Android 端末の NFC リーダーに端末をかざして、WebAut
 
 | 文書 | 内容 |
 |---|---|
-| [docs/DESIGN.md](docs/DESIGN.md) | 設計 (構成・プロトコル・セキュリティ・既知の制約) |
+| [docs/design/](docs/design/README.md) | 設計書一式 (基本設計・詳細設計・付録) |
 | [docs/CLOUD-BUILD.md](docs/CLOUD-BUILD.md) | クラウド (Claude Code on the web) での APK ビルド環境の設定 |
 | [docs/LOCAL-BUILD-macOS.md](docs/LOCAL-BUILD-macOS.md) | macOS + Android Studio でのローカルビルド |
 | [docs/TESTING.md](docs/TESTING.md) | Windows / macOS / Android での動作確認手順 |

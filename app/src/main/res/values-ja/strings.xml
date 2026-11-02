@@ -128,7 +128,7 @@
     <string name="settings_bluetooth_help">PC と本端末をペアリングすると FIDO HID デバイスとして認識されます。OS・ブラウザによっては利用できません。</string>
 
     <!-- このアプリについて -->
-    <string name="about_description">Android 端末を YubiKey のような FIDO2 (CTAP2) 物理セキュリティキーとして NFC で利用できるようにします。Google Play 開発者サービスは不要です。</string>
+    <string name="about_description">FIDO / FIDO2 (WebAuthn) を使用した Web アプリケーションのテスト用ツールです。Android 端末を NFC で FIDO2 (CTAP2) セキュリティキーとして利用できます。YubiKey などの物理セキュリティキーの代替としては使用せず、本番のアカウントには登録しないでください。Google Play 開発者サービスは不要です。</string>
     <string name="about_version">バージョン</string>
     <string name="about_aaguid">AAGUID</string>
     <string name="about_protocols">プロトコル</string>

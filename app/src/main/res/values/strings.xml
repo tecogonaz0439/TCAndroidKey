@@ -130,7 +130,7 @@
     <string name="settings_bluetooth_help">Pair this phone with the computer; it appears as a FIDO HID device. Some operating systems or browsers may not support it.</string>
 
     <!-- About -->
-    <string name="about_description">Turns this Android device into a FIDO2 (CTAP2) security key, like a hardware key, over NFC. No Google Play services required.</string>
+    <string name="about_description">A testing tool for FIDO / FIDO2 (WebAuthn) web applications: turns this Android device into a FIDO2 (CTAP2) security key over NFC. Do not use it as a replacement for physical security keys such as YubiKey, and do not register it with production accounts. No Google Play services required.</string>
     <string name="about_version">Version</string>
     <string name="about_aaguid">AAGUID</string>
     <string name="about_protocols">Protocols</string>
