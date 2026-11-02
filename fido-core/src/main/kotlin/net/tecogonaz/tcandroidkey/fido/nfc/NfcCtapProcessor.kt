@@ -11,7 +11,11 @@ import java.io.ByteArrayOutputStream
  *
  * - SELECT (AID A0000006472F0001) → バージョン文字列 "FIDO_2_0" を返す
  * - NFCCTAP_MSG (CLA 80, INS 10) → CTAP2 リクエストを [ctapHandler] へ渡す
- * - コマンドチェイニング (CLA bit 0x10) と レスポンスチェイニング (SW 61XX + GET RESPONSE) に対応
+ * - コマンドチェイニング (CLA bit 0x10) に対応。チェーン中に別の命令・不正な APDU が来たらチェーンを破棄する
+ * - 短い APDU の要求には 256 バイト単位のレスポンスチェイニング (SW 61XX + GET RESPONSE) で応答する。
+ *   GET RESPONSE は CLA 00 / 80 のどちらも受け付ける (クライアント実装により異なるため)
+ * - 拡張長 APDU の要求には、拡張長の応答として全体を一度に返す (CTAP 2.1 §11.3.6)。
+ *   Le が明示的に応答より短い場合のみ Le 単位でチェイニングする
  *
  * U2F (CTAP1) の APDU には応答しない (INS not supported)。
  * HostApduService の 1 回のフィールド接続 (activate〜deactivate) につき状態を持つため、
@@ -51,31 +55,41 @@ class NfcCtapProcessor(
         val apdu = try {
             Apdu.parse(apduBytes)
         } catch (e: IllegalArgumentException) {
+            abortChain()
             return sw(SW_WRONG_LENGTH)
         }
 
         if (apdu.cla == 0x00 && apdu.ins == INS_SELECT) return handleSelect(apdu)
         if (!selected) return sw(SW_FILE_NOT_FOUND)
 
-        // GET RESPONSE (レスポンスチェイニングの続き)
-        if ((apdu.cla and 0xEF) == 0x00 && apdu.ins == INS_GET_RESPONSE) {
-            return nextChunk(apdu.le)
+        val claBase = apdu.cla and 0xEF
+        val isChained = (apdu.cla and 0x10) != 0
+
+        // GET RESPONSE (レスポンスチェイニングの続き)。未対応命令の判定より先に処理し、保持中の応答を捨てない。
+        if ((claBase == 0x00 || claBase == 0x80) && !isChained && apdu.ins == INS_GET_RESPONSE) {
+            abortChain()
+            if (apdu.p1 != 0 || apdu.p2 != 0) return sw(SW_INCORRECT_P1P2)
+            if (apdu.data.isNotEmpty()) return sw(SW_WRONG_LENGTH)
+            return nextChunk(if (apdu.le <= 0) SHORT_MAX_LE else apdu.le)
         }
         // 他のコマンドが来たら未送信のレスポンスは破棄する
         pendingResponse = null
 
-        val claBase = apdu.cla and 0xEF
-        val isChained = (apdu.cla and 0x10) != 0
         if (claBase != 0x80) {
-            chaining = false
-            chainBuffer.reset()
+            abortChain()
             return sw(if (claBase == 0x00) SW_INS_NOT_SUPPORTED else SW_CLA_NOT_SUPPORTED)
         }
-        return when (apdu.ins) {
-            INS_NFCCTAP_MSG -> handleCtapMsg(apdu, isChained, keepAlive)
-            INS_NFCCTAP_GETRESPONSE -> sw(SW_CONDITIONS_NOT_SATISFIED)
-            else -> sw(SW_INS_NOT_SUPPORTED)
+        if (apdu.ins != INS_NFCCTAP_MSG) {
+            abortChain()
+            return sw(if (apdu.ins == INS_NFCCTAP_GETRESPONSE) SW_CONDITIONS_NOT_SATISFIED else SW_INS_NOT_SUPPORTED)
         }
+        return handleCtapMsg(apdu, isChained, keepAlive)
+    }
+
+    /** コマンドチェーンの途中状態を破棄する (残骸を次の要求へ混入させない)。 */
+    private fun abortChain() {
+        chaining = false
+        chainBuffer.reset()
     }
 
     private fun handleSelect(apdu: Apdu): ByteArray {
@@ -88,8 +102,7 @@ class NfcCtapProcessor(
 
     private fun handleCtapMsg(apdu: Apdu, isChained: Boolean, keepAlive: KeepAlive): ByteArray {
         if (chainBuffer.size() + apdu.data.size > maxCommandSize) {
-            chaining = false
-            chainBuffer.reset()
+            abortChain()
             return sw(SW_WRONG_LENGTH)
         }
         chainBuffer.write(apdu.data)
@@ -104,15 +117,17 @@ class NfcCtapProcessor(
         val response = ctapHandler(request, keepAlive)
         pendingResponse = response
         pendingOffset = 0
-        return nextChunk(if (apdu.extended) apdu.le else minOf(apdu.le, SHORT_MAX_LE))
+        val chunkSize = if (apdu.extended) {
+            // 拡張長: Le 省略・0000 (65536) は「全体」。明示的に短い Le の場合のみ分割する
+            if (apdu.le <= 0 || apdu.le >= EXTENDED_MAX_LE) response.size else apdu.le
+        } else {
+            if (apdu.le <= 0) SHORT_MAX_LE else minOf(apdu.le, SHORT_MAX_LE)
+        }
+        return nextChunk(chunkSize)
     }
 
-    private fun nextChunk(le: Int): ByteArray {
+    private fun nextChunk(chunkSize: Int): ByteArray {
         val response = pendingResponse ?: return sw(SW_CONDITIONS_NOT_SATISFIED)
-        val chunkSize = when {
-            le <= 0 -> SHORT_MAX_LE
-            else -> minOf(le, MAX_CHUNK)
-        }
         val remaining = response.size - pendingOffset
         val n = minOf(chunkSize, remaining)
         val chunk = response.copyOfRange(pendingOffset, pendingOffset + n)
@@ -142,6 +157,7 @@ class NfcCtapProcessor(
         const val SW_OK: Int = 0x9000
         const val SW_WRONG_LENGTH: Int = 0x6700
         const val SW_CONDITIONS_NOT_SATISFIED: Int = 0x6985
+        const val SW_INCORRECT_P1P2: Int = 0x6A86
         const val SW_FILE_NOT_FOUND: Int = 0x6A82
         const val SW_INS_NOT_SUPPORTED: Int = 0x6D00
         const val SW_CLA_NOT_SUPPORTED: Int = 0x6E00
@@ -149,11 +165,8 @@ class NfcCtapProcessor(
         /** 短い APDU の最大レスポンス長 (Le = 00 → 256)。 */
         const val SHORT_MAX_LE: Int = 256
 
-        /**
-         * 1 APDU あたりの最大レスポンス長。拡張長 APDU でも NFC コントローラによっては
-         * 長いフレームを扱えないため、控えめな値でチェイニングする。
-         */
-        const val MAX_CHUNK: Int = 1024
+        /** 拡張長 APDU の最大レスポンス長 (Le = 0000 → 65536)。 */
+        const val EXTENDED_MAX_LE: Int = 65536
 
         fun sw(code: Int): ByteArray = byteArrayOf((code ushr 8).toByte(), code.toByte())
     }
