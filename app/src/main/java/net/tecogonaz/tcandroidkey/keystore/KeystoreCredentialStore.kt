@@ -147,7 +147,7 @@ class KeystoreCredentialStore(
     override fun findDiscoverable(rpId: String): List<StoredCredential> {
         load()
         return cache.values.filter { it.rpId == rpId && it.discoverable }
-            .sortedByDescending { it.lastUsedAtMillis ?: it.createdAtMillis }
+            .sortedWith(StoredCredential.NEWEST_FIRST)
     }
 
     @Synchronized
@@ -194,7 +194,7 @@ class KeystoreCredentialStore(
     @Synchronized
     override fun list(): List<StoredCredential> {
         load()
-        return cache.values.sortedByDescending { it.createdAtMillis }
+        return cache.values.sortedWith(StoredCredential.NEWEST_FIRST)
     }
 
     @Synchronized
@@ -229,7 +229,7 @@ class KeystoreCredentialStore(
     }
 
     private fun publish() {
-        _credentials.value = cache.values.sortedByDescending { it.createdAtMillis }
+        _credentials.value = cache.values.sortedWith(StoredCredential.NEWEST_FIRST)
     }
 
     private fun alias(id: ByteArray): String = ALIAS_PREFIX + Hex.encode(id)

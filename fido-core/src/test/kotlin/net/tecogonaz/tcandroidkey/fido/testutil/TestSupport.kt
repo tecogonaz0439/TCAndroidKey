@@ -51,7 +51,7 @@ class InMemoryCredentialStore : CredentialStore {
         creds.values.filter { c -> c.rpId == rpId && ids.any { it.contentEquals(c.id) } }
 
     override fun findDiscoverable(rpId: String): List<StoredCredential> =
-        creds.values.filter { it.rpId == rpId && it.discoverable }.sortedByDescending { it.createdAtMillis }
+        creds.values.filter { it.rpId == rpId && it.discoverable }.sortedWith(StoredCredential.NEWEST_FIRST)
 
     override fun deleteDiscoverable(rpId: String, userId: ByteArray) {
         creds.values.filter { it.rpId == rpId && it.discoverable && it.user.id.contentEquals(userId) }

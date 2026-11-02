@@ -46,6 +46,15 @@ data class StoredCredential(
 
     override fun equals(other: Any?): Boolean = other is StoredCredential && id.contentEquals(other.id)
     override fun hashCode(): Int = id.contentHashCode()
+
+    companion object {
+        /**
+         * 作成日時の新しい順 (CTAP 2.0 §5.2 / 2.1 §6.2.2 の discoverable credential の順序)。
+         * 同時刻の場合は credential ID の順で決定的にする。
+         */
+        val NEWEST_FIRST: Comparator<StoredCredential> =
+            compareByDescending<StoredCredential> { it.createdAtMillis }.thenBy { it.idHex }
+    }
 }
 
 /**
@@ -61,7 +70,7 @@ interface CredentialStore {
     /** 指定 RP のうち、ID が [ids] のいずれかと一致するクレデンシャルを返す。 */
     fun findByIds(rpId: String, ids: List<ByteArray>): List<StoredCredential>
 
-    /** 指定 RP の discoverable credential を新しい順に返す。 */
+    /** 指定 RP の discoverable credential を作成日時の新しい順 ([StoredCredential.NEWEST_FIRST]) に返す。 */
     fun findDiscoverable(rpId: String): List<StoredCredential>
 
     /** 同一 RP・同一ユーザー ID の既存 discoverable credential を削除する (上書き登録)。 */

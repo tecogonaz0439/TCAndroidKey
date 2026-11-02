@@ -31,7 +31,10 @@ class Ctap2Authenticator(
     private val configProvider: () -> AuthenticatorConfig,
     private val transportName: String,
     private val listener: AuthenticatorEventListener = AuthenticatorEventListener.NONE,
-    private val clock: () -> Long = System::currentTimeMillis
+    /** イベントの時刻 (wall clock)。 */
+    private val clock: () -> Long = System::currentTimeMillis,
+    /** GetNextAssertion のタイマー用の単調時計 (ms)。時計の変更の影響を受けない。 */
+    private val monotonicClock: () -> Long = { System.nanoTime() / 1_000_000 }
 ) {
     private class PendingAssertions(
         val credentials: List<StoredCredential>,
@@ -40,7 +43,8 @@ class Ctap2Authenticator(
         val clientDataHash: ByteArray,
         val flags: Int,
         val userVerified: Boolean,
-        val createdAt: Long,
+        /** 直前の GetAssertion / GetNextAssertion の成功時刻 (単調時計)。 */
+        var lastAssertionAt: Long,
         /** 元の GetAssertion の認可。停止・前面離脱で無効になる。 */
         val lease: AuthorizationLease,
         /** 元の GetAssertion の取消トークン。切断・再同期で無効になる。 */
@@ -145,7 +149,7 @@ class Ctap2Authenticator(
 
     private fun makeCredential(p: Map<*, *>, keepAlive: KeepAlive): Map<Long, Any> {
         val config = configProvider()
-        val clientDataHash = requireBytes(p, 1)
+        val clientDataHash = requireClientDataHash(p, 1)
         val rp = requireMap(p, 2)
         val userMap = requireMap(p, 3)
         val credParams = requireList(p, 4)
@@ -156,33 +160,37 @@ class Ctap2Authenticator(
         if (userId.isEmpty() || userId.size > 64) throw CtapException(CtapStatus.ERR_INVALID_PARAMETER)
         val user = UserEntity(userId, userMap.typedText("name"), userMap.typedText("displayName"))
 
+        // pubKeyCredParams の構造 (型) は先に検証し、対応アルゴリズムの有無は excludeList の後で判定する。
         var es256 = false
         for (param in credParams) {
             val m = param as? Map<*, *> ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
             val type = m.typedText("type") ?: throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
             val alg = m["alg"] as? Long ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-            if (type == "public-key" && alg == CoseAlgorithm.ES256) {
-                es256 = true
-                break
-            }
+            if (type == "public-key" && alg == CoseAlgorithm.ES256) es256 = true
         }
-        if (!es256) throw CtapException(CtapStatus.ERR_UNSUPPORTED_ALGORITHM)
 
         val excludeIds = credentialIds(p.optList(5))
+        p.optMap(6) // extensions: 未対応だが map であることは検証する (中身の未知の拡張は無視)
         val options = p.optMap(7)
         val rk = options.option("rk") ?: false
         val uv = options.option("uv") ?: false
-        if (options.option("up") == false) throw CtapException(CtapStatus.ERR_INVALID_OPTION)
+        val upOption = options.option("up")
+        val pinAuth = p.optBytes(8)
+        p.optInt(9) // pinProtocol: 型のみ検証
 
         val request = AuthorizationRequest(CtapOperation.MAKE_CREDENTIAL, rpId, user.name, true, uv)
 
-        checkPinAuth(p.optBytes(8), request, keepAlive)
-
+        // CTAP 2.0 §5.1 の手順 1: excludeList の該当確認はアルゴリズムの判定より前。
         if (excludeIds.isNotEmpty() && store.findByIds(rpId, excludeIds).isNotEmpty()) {
             // 仕様上はユーザー存在確認を経てから返す。
             authorizeOrThrow(request, keepAlive).lease.complete(consumed = false)
             throw CtapException(CtapStatus.ERR_CREDENTIAL_EXCLUDED)
         }
+        if (!es256) throw CtapException(CtapStatus.ERR_UNSUPPORTED_ALGORITHM)
+        // up:false は登録では無効 (CTAP 2.1 §6.1.2)。up:true は互換性のため受け付ける。
+        if (upOption == false) throw CtapException(CtapStatus.ERR_INVALID_OPTION)
+
+        checkPinAuth(pinAuth, request, keepAlive)
 
         val grant = authorizeOrThrow(request, keepAlive)
         var success = false
@@ -226,48 +234,61 @@ class Ctap2Authenticator(
 
     private fun getAssertion(p: Map<*, *>, keepAlive: KeepAlive, channel: Int): Map<Long, Any> {
         val rpId = p.typedText(1) ?: throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
-        val clientDataHash = requireBytes(p, 2)
-        val allowIds = credentialIds(p.optList(3))
+        val clientDataHash = requireClientDataHash(p, 2)
+        // 空でない allowList が指定された場合は、対応する type の ID が 0 件でもそのリストに限定する
+        // (discoverable credential の検索には切り替えない)。
+        val rawAllowList = p.optList(3)
+        val restrictToAllowList = !rawAllowList.isNullOrEmpty()
+        val allowIds = credentialIds(rawAllowList)
+        p.optMap(4) // extensions: 型のみ検証
         val options = p.optMap(5)
         if (options.option("rk") != null) throw CtapException(CtapStatus.ERR_INVALID_OPTION)
         val up = options.option("up") ?: true
         val uv = options.option("uv") ?: false
+        val pinAuth = p.optBytes(6)
+        p.optInt(7) // pinProtocol: 型のみ検証
 
         val request = AuthorizationRequest(CtapOperation.GET_ASSERTION, rpId, null, up, uv)
-        checkPinAuth(p.optBytes(6), request, keepAlive)
+        checkPinAuth(pinAuth, request, keepAlive)
 
         // credential の有無は、認可 (受付状態の確認) を経てから返す (認可前の存在確認を防ぐ)。
         val grant = authorizeOrThrow(request, keepAlive)
         var success = false
-        var userPresent = false
+        var userInteraction = false
         try {
-            val credentials = if (allowIds.isNotEmpty()) {
-                store.findByIds(rpId, allowIds)
-            } else {
-                store.findDiscoverable(rpId)
+            val credentials = when {
+                !restrictToAllowList -> store.findDiscoverable(rpId)
+                allowIds.isEmpty() -> emptyList()
+                else -> store.findByIds(rpId, allowIds)
             }
             if (credentials.isEmpty()) throw CtapException(CtapStatus.ERR_NO_CREDENTIALS)
 
-            userPresent = up && grant.userPresent
-            val userVerified = userPresent && grant.userVerified
+            // UP と UV は独立に扱う (up:false, uv:true も有効な組み合わせ)。
+            val userPresent = up && grant.userPresent
+            if (uv && !grant.userVerified) {
+                throw CtapException(CtapStatus.ERR_OPERATION_DENIED, "user verification was not performed")
+            }
+            // silent assertion (up:false, uv:false) では UV を立てない。
+            val userVerified = grant.userVerified && (userPresent || uv)
+            userInteraction = userPresent || userVerified
             val flags = (if (userPresent) AuthDataFlags.UP else 0) or (if (userVerified) AuthDataFlags.UV else 0)
             val rpIdHash = rpIdHash(rpId)
 
             val first = credentials.first()
             val response = assertionResponse(
-                first, rpIdHash, clientDataHash, flags, userVerified, allowIds.isEmpty(), grant.lease, keepAlive
+                first, rpIdHash, clientDataHash, flags, userVerified, !restrictToAllowList, grant.lease, keepAlive
             )
-            if (allowIds.isEmpty() && credentials.size > 1) {
+            if (!restrictToAllowList && credentials.size > 1) {
                 response[5L] = credentials.size.toLong()
                 pending = PendingAssertions(
-                    credentials, 1, rpIdHash, clientDataHash, flags, userVerified, clock(),
+                    credentials, 1, rpIdHash, clientDataHash, flags, userVerified, monotonicClock(),
                     lease = grant.lease, origin = keepAlive, channel = channel
                 )
             }
             success = true
             return response
         } finally {
-            grant.lease.complete(consumed = success && userPresent)
+            grant.lease.complete(consumed = success && userInteraction)
         }
     }
 
@@ -275,7 +296,8 @@ class Ctap2Authenticator(
         val state = pending ?: throw CtapException(CtapStatus.ERR_NOT_ALLOWED)
         val reason = when {
             state.channel != channel -> "different channel"
-            clock() - state.createdAt > NEXT_ASSERTION_TIMEOUT_MS -> "timeout"
+            // 直前の GetAssertion / GetNextAssertion からの経過時間 (CTAP 2.0 §5.3)
+            monotonicClock() - state.lastAssertionAt > NEXT_ASSERTION_TIMEOUT_MS -> "timeout"
             state.nextIndex >= state.credentials.size -> "no more credentials"
             state.origin.isCancelled || keepAlive.isCancelled -> "transport reset or cancelled"
             !state.lease.isValid() -> "authorization revoked"
@@ -285,12 +307,16 @@ class Ctap2Authenticator(
             pending = null
             throw CtapException(CtapStatus.ERR_NOT_ALLOWED, reason)
         }
-        val credential = state.credentials[state.nextIndex++]
-        if (state.nextIndex >= state.credentials.size) pending = null
-        return assertionResponse(
+        val credential = state.credentials[state.nextIndex]
+        val response = assertionResponse(
             credential, state.rpIdHash, state.clientDataHash, state.flags, state.userVerified, true,
             state.lease, keepAlive
         )
+        // 署名に成功してから位置とタイマーを進める。
+        state.nextIndex++
+        state.lastAssertionAt = monotonicClock()
+        if (state.nextIndex >= state.credentials.size) pending = null
+        return response
     }
 
     private fun assertionResponse(
@@ -404,6 +430,15 @@ class Ctap2Authenticator(
         }
     }
 
+    /** clientDataHash は SHA-256 (32 バイト)。 */
+    private fun requireClientDataHash(p: Map<*, *>, key: Int): ByteArray {
+        val hash = requireBytes(p, key)
+        if (hash.size != CLIENT_DATA_HASH_LENGTH) {
+            throw CtapException(CtapStatus.ERR_INVALID_LENGTH, "clientDataHash must be 32 bytes")
+        }
+        return hash
+    }
+
     private fun requireBytes(p: Map<*, *>, key: Int): ByteArray {
         if (!p.has(key)) throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
         return p.bytes(key) ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
@@ -425,6 +460,9 @@ class Ctap2Authenticator(
     private fun Map<*, *>.optMap(key: Int): Map<*, *>? =
         if (!has(key)) null else map(key) ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
 
+    private fun Map<*, *>.optInt(key: Int): Long? =
+        if (!has(key)) null else this[key.toLong()] as? Long ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
+
     private fun Map<*, *>.optBytes(key: Int): ByteArray? =
         if (!has(key)) null else bytes(key) ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
 
@@ -441,6 +479,7 @@ class Ctap2Authenticator(
 
     companion object {
         const val NEXT_ASSERTION_TIMEOUT_MS: Long = 30_000
+        const val CLIENT_DATA_HASH_LENGTH: Int = 32
 
         fun rpIdHash(rpId: String): ByteArray =
             MessageDigest.getInstance("SHA-256").digest(rpId.toByteArray(Charsets.UTF_8))

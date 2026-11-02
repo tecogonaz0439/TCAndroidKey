@@ -83,4 +83,40 @@ class CborTest {
         val r = runCatching { Cbor.decode(Hex.decode("5affffffff")) }
         assertTrue(r.exceptionOrNull() is CborException)
     }
+
+    // ------------------------------------------------------------------ レビュー指摘 F-11
+
+    private fun rejects(hex: String) {
+        try {
+            Cbor.decode(net.tecogonaz.tcandroidkey.fido.ctap2.Hex.decode(hex))
+            org.junit.Assert.fail("should reject $hex")
+        } catch (e: CborException) {
+            // expected
+        }
+    }
+
+    @Test
+    fun rejectsNonCanonicalIntegerAndLengthEncodings() {
+        rejects("1801")             // 1 を 1 バイト引数で表現
+        rejects("190017")           // 23 を 2 バイトで表現
+        rejects("1A0000FFFF")       // 65535 を 4 バイトで表現
+        rejects("1B00000000FFFFFFFF")
+        rejects("5801AA")           // 長さ 1 のバイト列を 1 バイト長で表現
+        rejects("B8010000")           // マップ長の非最短表現
+        org.junit.Assert.assertEquals(24L, Cbor.decode(net.tecogonaz.tcandroidkey.fido.ctap2.Hex.decode("1818")))
+        org.junit.Assert.assertEquals(256L, Cbor.decode(net.tecogonaz.tcandroidkey.fido.ctap2.Hex.decode("190100")))
+    }
+
+    @Test
+    fun rejectsTags() {
+        rejects("C0A0")
+        rejects("D82401")
+    }
+
+    @Test
+    fun rejectsInvalidUtf8() {
+        rejects("61FF")
+        rejects("62C328") // 不完全な 2 バイト文字
+        org.junit.Assert.assertEquals("é", Cbor.decode(net.tecogonaz.tcandroidkey.fido.ctap2.Hex.decode("62C3A9")))
+    }
 }

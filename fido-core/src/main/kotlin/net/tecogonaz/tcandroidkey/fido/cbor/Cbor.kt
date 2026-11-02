@@ -4,6 +4,9 @@
 package net.tecogonaz.tcandroidkey.fido.cbor
 
 import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
+import java.nio.charset.CharacterCodingException
+import java.nio.charset.CodingErrorAction
 
 /**
  * CTAP2 で必要な範囲の CBOR (RFC 8949) エンコーダ／デコーダ。
@@ -18,6 +21,10 @@ import java.io.ByteArrayOutputStream
  * - 浮動小数点: [Double]
  *
  * エンコードは CTAP2 canonical CBOR 形式 (最短長の整数表現、マップキーの正規順序) で行う。
+ *
+ * デコードは CTAP2 の要求に合わせて次を拒否する: 不定長、最短でない整数・長さの表現、タグ、
+ * 不正な UTF-8、重複キー、末尾の余分なデータ、深すぎる入れ子。
+ * マップキーの並び順は検証しない (クライアントの互換性を優先する)。
  */
 class CborException(message: String) : Exception(message)
 
@@ -142,22 +149,46 @@ object Cbor {
             return data[pos++].toInt() and 0xFF
         }
 
-        fun readArg(info: Int): Long = when {
-            info < 24 -> info.toLong()
-            info == 24 -> readByte().toLong()
-            info == 25 -> ((readByte() shl 8) or readByte()).toLong()
-            info == 26 -> {
-                var v = 0L
-                repeat(4) { v = (v shl 8) or readByte().toLong() }
-                v
+        fun readArg(info: Int): Long {
+            val v: Long = when {
+                info < 24 -> return info.toLong()
+                info == 24 -> readByte().toLong()
+                info == 25 -> ((readByte() shl 8) or readByte()).toLong()
+                info == 26 -> {
+                    var x = 0L
+                    repeat(4) { x = (x shl 8) or readByte().toLong() }
+                    x
+                }
+                info == 27 -> {
+                    var x = 0L
+                    repeat(8) { x = (x shl 8) or readByte().toLong() }
+                    if (x < 0) throw CborException("integer too large")
+                    x
+                }
+                else -> throw CborException("indefinite length or reserved info $info not supported")
             }
-            info == 27 -> {
-                var v = 0L
-                repeat(8) { v = (v shl 8) or readByte().toLong() }
-                if (v < 0) throw CborException("integer too large")
-                v
+            // 最短表現でない符号化 (例: 18 01) は canonical CBOR ではないため拒否する。
+            val minimum = when (info) {
+                24 -> 24L
+                25 -> 0x100L
+                26 -> 0x1_0000L
+                else -> 0x1_0000_0000L
             }
-            else -> throw CborException("indefinite length or reserved info $info not supported")
+            if (v < minimum) throw CborException("non-canonical integer encoding")
+            return v
+        }
+
+        fun readText(len: Long): String {
+            val bytes = readBytes(len)
+            return try {
+                Charsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(bytes))
+                    .toString()
+            } catch (e: CharacterCodingException) {
+                throw CborException("invalid UTF-8 in text string")
+            }
         }
 
         fun readBytes(len: Long): ByteArray {
@@ -176,7 +207,7 @@ object Cbor {
                 0 -> readArg(info)
                 1 -> -1 - readArg(info)
                 2 -> readBytes(readArg(info))
-                3 -> String(readBytes(readArg(info)), Charsets.UTF_8)
+                3 -> readText(readArg(info))
                 4 -> {
                     val n = readArg(info)
                     if (n > end - pos) throw CborException("array length exceeds data")
@@ -196,10 +227,7 @@ object Cbor {
                     }
                     map
                 }
-                6 -> {
-                    readArg(info) // tag number (ignored)
-                    readItem(depth + 1)
-                }
+                6 -> throw CborException("tags are not allowed in CTAP2 CBOR")
                 7 -> when (info) {
                     20 -> false
                     21 -> true
