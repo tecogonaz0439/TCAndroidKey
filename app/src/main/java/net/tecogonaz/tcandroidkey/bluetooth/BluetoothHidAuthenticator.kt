@@ -43,10 +43,10 @@ class BluetoothHidAuthenticator(private val container: AppContainer) {
     private val ctapWorker = Executors.newSingleThreadExecutor { r -> Thread(r, "fido-bt-ctap").apply { isDaemon = true } }
     private val policy = container.session.policy(TRANSPORT, blocking = true)
     private val authenticator = container.newAuthenticator(TRANSPORT, listOf("usb"), policy)
+    // CTAPHID_CANCEL・切断・停止による取消は、CtapHidProcessor が要求ごとのトークン (keepAlive) で伝える。
     private val processor = CtapHidProcessor(
-        ctapHandler = { request, keepAlive -> authenticator.process(request, keepAlive) },
+        ctapHandler = { cid, request, keepAlive -> authenticator.process(request, keepAlive, cid) },
         sendReport = ::sendReport,
-        onCancel = { policy.cancel() },
         worker = ctapWorker
     )
 
@@ -85,7 +85,13 @@ class BluetoothHidAuthenticator(private val container: AppContainer) {
         }
     }
 
+    /**
+     * HID デバイスの登録を解除する。UI スレッドから呼ばれるため、ブロックしない
+     * (本人確認待ちの操作は取消トークンで中断され、CTAP の状態はロックを待たずに破棄する)。
+     */
     fun stop() {
+        processor.reset()
+        authenticator.resetSession()
         val h = hid ?: run {
             if (_state.value.status != Status.UNSUPPORTED) _state.value = State(Status.STOPPED)
             return
@@ -94,8 +100,6 @@ class BluetoothHidAuthenticator(private val container: AppContainer) {
         runCatching { adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, h) }
         hid = null
         host = null
-        processor.reset()
-        authenticator.resetSession()
         _state.value = State(Status.STOPPED)
     }
 
@@ -131,6 +135,8 @@ class BluetoothHidAuthenticator(private val container: AppContainer) {
             if (profile != BluetoothProfile.HID_DEVICE) return
             hid = null
             host = null
+            processor.reset()
+            authenticator.resetSession()
             _state.value = State(Status.STOPPED)
         }
     }
@@ -181,6 +187,7 @@ class BluetoothHidAuthenticator(private val container: AppContainer) {
         override fun onVirtualCableUnplug(device: BluetoothDevice?) {
             host = null
             processor.reset()
+            authenticator.resetSession()
         }
     }
 

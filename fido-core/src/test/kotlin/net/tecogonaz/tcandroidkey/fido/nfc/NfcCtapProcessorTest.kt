@@ -25,7 +25,7 @@ class NfcCtapProcessorTest {
 
     @Test
     fun selectReturnsVersion() {
-        val p = NfcCtapProcessor({ byteArrayOf(0) })
+        val p = NfcCtapProcessor({ _, _ -> byteArrayOf(0) })
         val r = p.process(select)
         assertEquals(0x9000, sw(r))
         assertEquals("FIDO_2_0", String(body(r)))
@@ -33,27 +33,27 @@ class NfcCtapProcessorTest {
 
     @Test
     fun selectIsRejectedWhenGateClosed() {
-        val p = NfcCtapProcessor({ byteArrayOf(0) }, selectGate = { false })
+        val p = NfcCtapProcessor({ _, _ -> byteArrayOf(0) }, selectGate = { false })
         assertEquals(0x6A82, sw(p.process(select)))
         assertEquals(0x6A82, sw(p.process(Hex.decode("80100000010400"))))
     }
 
     @Test
     fun otherAidIsNotFound() {
-        val p = NfcCtapProcessor({ byteArrayOf(0) })
+        val p = NfcCtapProcessor({ _, _ -> byteArrayOf(0) })
         assertEquals(0x6A82, sw(p.process(Hex.decode("00A4040007A000000003101000"))))
     }
 
     @Test
     fun ctapMsgWithoutSelectFails() {
-        val p = NfcCtapProcessor({ byteArrayOf(0) })
+        val p = NfcCtapProcessor({ _, _ -> byteArrayOf(0) })
         assertEquals(0x6A82, sw(p.process(Hex.decode("80100000010400"))))
     }
 
     @Test
     fun commandChainingAssemblesRequest() {
         var received: ByteArray? = null
-        val p = NfcCtapProcessor({ received = it; byteArrayOf(0) })
+        val p = NfcCtapProcessor({ req, _ -> received = req; byteArrayOf(0) })
         p.process(select)
         assertEquals(0x9000, sw(p.process(Hex.decode("9010000003010203"))))
         assertEquals(0x9000, sw(p.process(Hex.decode("90100000020405"))))
@@ -65,7 +65,7 @@ class NfcCtapProcessorTest {
     @Test
     fun longResponseIsChainedWithGetResponse() {
         val big = ByteArray(700) { it.toByte() }
-        val p = NfcCtapProcessor({ big })
+        val p = NfcCtapProcessor({ _, _ -> big })
         p.process(select)
         val out = ByteArrayOutputStream()
         var r = p.process(Hex.decode("80100000010400"))
@@ -82,7 +82,7 @@ class NfcCtapProcessorTest {
     @Test
     fun extendedLengthApduIsAccepted() {
         var received: ByteArray? = null
-        val p = NfcCtapProcessor({ received = it; ByteArray(300) { 7 } })
+        val p = NfcCtapProcessor({ req, _ -> received = req; ByteArray(300) { 7 } })
         p.process(select)
         val r = p.process(Hex.decode("8010000000000104" + "0000"))
         assertArrayEquals(byteArrayOf(4), received)
@@ -96,7 +96,7 @@ class NfcCtapProcessorTest {
             InMemoryCredentialStore(), FakePolicy(),
             { AuthenticatorConfig(ByteArray(16)) }, "nfc"
         )
-        val p = NfcCtapProcessor({ auth.process(it) })
+        val p = NfcCtapProcessor({ req, ka -> auth.process(req, ka) })
         p.process(select)
         val out = ByteArrayOutputStream()
         var r = p.process(Hex.decode("80100000010400"))
@@ -113,7 +113,7 @@ class NfcCtapProcessorTest {
 
     @Test
     fun u2fApduIsNotSupported() {
-        val p = NfcCtapProcessor({ byteArrayOf(0) })
+        val p = NfcCtapProcessor({ _, _ -> byteArrayOf(0) })
         p.process(select)
         assertEquals(0x6D00, sw(p.process(Hex.decode("0003000000"))))
     }

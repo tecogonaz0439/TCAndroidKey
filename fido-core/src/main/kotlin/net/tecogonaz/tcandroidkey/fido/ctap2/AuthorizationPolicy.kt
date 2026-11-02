@@ -20,18 +20,55 @@ data class AuthorizationRequest(
     val requireUserVerification: Boolean
 )
 
+/**
+ * 認可された 1 つの操作 (MakeCredential / GetAssertion とそれに続く GetNextAssertion 群など) の有効性。
+ *
+ * - [isValid] は鍵操作の直前と応答を返す直前に確認する。受付の明示的な停止・アプリの前面離脱で false になる。
+ *   ワンタイム認可の「消費」では false にならない (同一操作の GetNextAssertion を継続できるようにするため)。
+ * - [complete] は操作の終了時に必ず 1 回呼ぶ (2 回目以降は無視される)。
+ *   `consumed = true` はユーザー操作を伴う操作が成功したことを表し、ワンタイム認可を消費する。
+ */
+interface AuthorizationLease {
+    fun isValid(): Boolean
+
+    fun complete(consumed: Boolean)
+
+    companion object {
+        /** 有効性の管理を行わないポリシー用。 */
+        val UNBOUND: AuthorizationLease = object : AuthorizationLease {
+            override fun isValid(): Boolean = true
+            override fun complete(consumed: Boolean) {}
+        }
+    }
+}
+
 sealed interface AuthorizationResult {
-    /** 実行を許可する。フラグは authenticatorData の UP / UV ビットに反映される。 */
-    data class Granted(val userPresent: Boolean, val userVerified: Boolean) : AuthorizationResult
+    /**
+     * 実行を許可する。フラグは authenticatorData の UP / UV ビットに反映される。
+     * [lease] は操作の終了時に [AuthorizationLease.complete] すること。
+     */
+    data class Granted(
+        val userPresent: Boolean,
+        val userVerified: Boolean,
+        val lease: AuthorizationLease = AuthorizationLease.UNBOUND
+    ) : AuthorizationResult
 
     /** 実行を拒否する。[status] が CTAP ステータスとしてクライアントへ返る。 */
     data class Denied(val status: Int, val reason: String) : AuthorizationResult
 }
 
-/** 長時間処理中にトランスポートへ keepalive を送るためのコールバック (CTAPHID 用)。 */
+/**
+ * トランスポートが 1 つの要求ごとに渡すコールバック。
+ *
+ * - [send] は長時間処理中に keepalive を送る (CTAPHID 用。NFC では何もしない)。
+ * - [isCancelled] は、その要求がホストから取り消された (CTAPHID_CANCEL)、またはトランスポートが
+ *   切断・再同期された場合に true になる。要求の受信時に作られ、トランスポート全体では共有しない。
+ */
 fun interface KeepAlive {
     /** @param status 1 = PROCESSING, 2 = UPNEEDED */
     fun send(status: Int)
+
+    val isCancelled: Boolean get() = false
 
     companion object {
         const val STATUS_PROCESSING: Int = 1
@@ -45,12 +82,10 @@ fun interface KeepAlive {
  *
  * Android 実装では「アプリが前面で起動中」かつ「生体認証等で本人確認済み (有効期限内)」の場合のみ許可する。
  * [authorize] はワーカースレッドから呼ばれ、トランスポートによってはユーザー操作を待つためにブロックしてよい。
+ * 許可した場合は [AuthorizationResult.Granted.lease] で操作の有効性と終了を管理する。
  */
-interface AuthorizationPolicy {
+fun interface AuthorizationPolicy {
     fun authorize(request: AuthorizationRequest, keepAlive: KeepAlive): AuthorizationResult
-
-    /** 許可された操作が完了したときに呼ばれる (ワンタイム認可の消費などに用いる)。 */
-    fun onOperationCompleted(request: AuthorizationRequest, success: Boolean) {}
 }
 
 /** 認証器の処理結果を UI / ログへ通知するイベント。 */

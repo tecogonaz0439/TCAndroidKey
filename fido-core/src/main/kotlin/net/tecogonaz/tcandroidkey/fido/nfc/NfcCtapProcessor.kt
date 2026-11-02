@@ -3,6 +3,7 @@
 
 package net.tecogonaz.tcandroidkey.fido.nfc
 
+import net.tecogonaz.tcandroidkey.fido.ctap2.KeepAlive
 import java.io.ByteArrayOutputStream
 
 /**
@@ -17,7 +18,8 @@ import java.io.ByteArrayOutputStream
  * 切断時は [reset] を呼ぶこと。
  */
 class NfcCtapProcessor(
-    private val ctapHandler: (ByteArray) -> ByteArray,
+    /** CTAP2 リクエストの処理。第 2 引数はその APDU 専用の取消トークン (切断で取り消される)。 */
+    private val ctapHandler: (ByteArray, KeepAlive) -> ByteArray,
     /** SELECT を受理してよいか (アプリ前面・本人確認済みなど)。false の場合 6A82 を返す。 */
     private val selectGate: () -> Boolean = { true },
     private val maxCommandSize: Int = 8192,
@@ -41,8 +43,11 @@ class NfcCtapProcessor(
         pendingOffset = 0
     }
 
+    /**
+     * @param keepAlive この APDU 専用の取消トークン。NFC では keepalive は送らず、切断の検出にのみ使う。
+     */
     @Synchronized
-    fun process(apduBytes: ByteArray): ByteArray {
+    fun process(apduBytes: ByteArray, keepAlive: KeepAlive = KeepAlive.NONE): ByteArray {
         val apdu = try {
             Apdu.parse(apduBytes)
         } catch (e: IllegalArgumentException) {
@@ -67,7 +72,7 @@ class NfcCtapProcessor(
             return sw(if (claBase == 0x00) SW_INS_NOT_SUPPORTED else SW_CLA_NOT_SUPPORTED)
         }
         return when (apdu.ins) {
-            INS_NFCCTAP_MSG -> handleCtapMsg(apdu, isChained)
+            INS_NFCCTAP_MSG -> handleCtapMsg(apdu, isChained, keepAlive)
             INS_NFCCTAP_GETRESPONSE -> sw(SW_CONDITIONS_NOT_SATISFIED)
             else -> sw(SW_INS_NOT_SUPPORTED)
         }
@@ -81,7 +86,7 @@ class NfcCtapProcessor(
         return versionString.toByteArray(Charsets.US_ASCII) + sw(SW_OK)
     }
 
-    private fun handleCtapMsg(apdu: Apdu, isChained: Boolean): ByteArray {
+    private fun handleCtapMsg(apdu: Apdu, isChained: Boolean, keepAlive: KeepAlive): ByteArray {
         if (chainBuffer.size() + apdu.data.size > maxCommandSize) {
             chaining = false
             chainBuffer.reset()
@@ -96,7 +101,7 @@ class NfcCtapProcessor(
         chainBuffer.reset()
         chaining = false
         if (request.isEmpty()) return sw(SW_WRONG_LENGTH)
-        val response = ctapHandler(request)
+        val response = ctapHandler(request, keepAlive)
         pendingResponse = response
         pendingOffset = 0
         return nextChunk(if (apdu.extended) apdu.le else minOf(apdu.le, SHORT_MAX_LE))

@@ -3,6 +3,7 @@
 
 package net.tecogonaz.tcandroidkey.fido.testutil
 
+import net.tecogonaz.tcandroidkey.fido.ctap2.AuthorizationLease
 import net.tecogonaz.tcandroidkey.fido.ctap2.AuthorizationPolicy
 import net.tecogonaz.tcandroidkey.fido.ctap2.AuthorizationRequest
 import net.tecogonaz.tcandroidkey.fido.ctap2.AuthorizationResult
@@ -90,20 +91,45 @@ class FakePolicy(
     var result: AuthorizationResult = AuthorizationResult.Granted(userPresent = true, userVerified = true)
 ) : AuthorizationPolicy {
     val requests = mutableListOf<AuthorizationRequest>()
+
+    /** complete された Lease (要求, consumed)。 */
     val completed = mutableListOf<Pair<AuthorizationRequest, Boolean>>()
+
+    /** 発行した Lease の有効性 (false にすると以降の isValid が false)。 */
+    @Volatile
+    var leaseValid = true
+
+    /** isValid が呼ばれるたびに呼ばれる (呼び出し時点で状態を変えるテスト用)。 */
+    var onValidityCheck: () -> Unit = {}
 
     override fun authorize(request: AuthorizationRequest, keepAlive: KeepAlive): AuthorizationResult {
         requests += request
-        return result
+        val r = result
+        return if (r is AuthorizationResult.Granted) r.copy(lease = FakeLease(request)) else r
     }
 
-    override fun onOperationCompleted(request: AuthorizationRequest, success: Boolean) {
-        completed += request to success
+    private inner class FakeLease(val request: AuthorizationRequest) : AuthorizationLease {
+        override fun isValid(): Boolean {
+            onValidityCheck()
+            return leaseValid
+        }
+
+        override fun complete(consumed: Boolean) {
+            completed += request to consumed
+        }
     }
 
     companion object {
         fun denied() = FakePolicy(AuthorizationResult.Denied(CtapStatus.ERR_OPERATION_DENIED, "denied"))
     }
+}
+
+/** 取消状態を外から変えられる KeepAlive。 */
+class CancellableKeepAlive : KeepAlive {
+    @Volatile
+    var cancelled = false
+    override val isCancelled: Boolean get() = cancelled
+    override fun send(status: Int) {}
 }
 
 object TestCrypto {

@@ -197,7 +197,7 @@ class Ctap2AuthenticatorTest {
         )
         assertEquals(CtapStatus.OK, status)
         assertEquals(0, (assertion!![2L] as ByteArray)[32].toInt())
-        assertTrue(policy.completed.isEmpty())
+        assertEquals("silent assertion completes without consuming", listOf(false), policy.completed.map { it.second })
         assertFalse(policy.requests.last().requireUserPresence)
     }
 

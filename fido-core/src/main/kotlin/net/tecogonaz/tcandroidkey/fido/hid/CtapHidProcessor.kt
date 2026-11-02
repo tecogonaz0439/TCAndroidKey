@@ -7,6 +7,7 @@ import net.tecogonaz.tcandroidkey.fido.ctap2.KeepAlive
 import java.io.ByteArrayOutputStream
 import java.security.SecureRandom
 import java.util.concurrent.Executor
+import java.util.concurrent.RejectedExecutionException
 
 /**
  * CTAPHID プロトコル (CTAP 2.1 §11.2) のフレーミング処理。
@@ -14,15 +15,18 @@ import java.util.concurrent.Executor
  * 64 バイト固定長の HID レポートを受け取り、メッセージを組み立てて CTAP2 (CBOR) 処理へ渡す。
  * Bluetooth HID Device プロファイル (実験的) で使用する。CTAP1/U2F (CTAPHID_MSG) は非対応。
  *
- * @param ctapHandler CBOR リクエストの処理。ユーザー操作待ちでブロックしてよい ([worker] 上で実行される)。
+ * CBOR 要求ごとに操作 ([Operation]) を作り、keepalive の送信と取消トークンを兼ねて [ctapHandler] へ渡す。
+ * - CTAPHID_CANCEL: 実行中の操作を取り消す。応答 (通常は CTAP2_ERR_KEEPALIVE_CANCEL) は元の要求に対して返す。
+ * - 割当済み CID への CTAPHID_INIT / [reset]: そのチャネル (reset は全チャネル) の操作を破棄し、応答も送らない。
+ *
+ * @param ctapHandler CBOR リクエストの処理 (CID, リクエスト, 操作)。ユーザー操作待ちでブロックしてよい
+ *                    ([worker] 上で実行される)。
  * @param sendReport 64 バイトの入力レポートをホストへ送信する。
- * @param onCancel ホストから CTAPHID_CANCEL を受けたときに呼ばれる (ユーザー操作待ちの中断用)。
  * @param worker CBOR 処理を実行するエグゼキュータ (シングルスレッド推奨)。
  */
 class CtapHidProcessor(
-    private val ctapHandler: (ByteArray, KeepAlive) -> ByteArray,
+    private val ctapHandler: (Int, ByteArray, KeepAlive) -> ByteArray,
     private val sendReport: (ByteArray) -> Unit,
-    private val onCancel: () -> Unit,
     private val worker: Executor,
     private val clock: () -> Long = System::currentTimeMillis,
     private val random: SecureRandom = SecureRandom()
@@ -36,13 +40,36 @@ class CtapHidProcessor(
         var lastPacketAt: Long
     )
 
+    /** 1 つの CBOR 要求の処理。keepalive の送信先と取消状態を持つ。 */
+    private inner class Operation(val cid: Int) : KeepAlive {
+        /** CTAPHID_CANCEL を受けた (応答は返す)。 */
+        @Volatile
+        var cancelled = false
+
+        /** INIT / reset で破棄された (応答も keepalive も送らない)。 */
+        @Volatile
+        var abandoned = false
+
+        override val isCancelled: Boolean get() = cancelled || abandoned
+
+        override fun send(status: Int) {
+            if (!abandoned) sendMessage(cid, CMD_KEEPALIVE, byteArrayOf(status.toByte()))
+        }
+    }
+
     private val lock = Any()
     private val sendLock = Any()
     private val channels = HashSet<Int>()
     private var assembly: Assembly? = null
 
-    @Volatile
-    private var busyCid: Int? = null
+    /** 実行中 (または実行待ち) の操作。[lock] で保護する。 */
+    private var busy: Operation? = null
+
+    /**
+     * チャネルごとの直近の操作 (完了済みを含む)。[lock] で保護する。
+     * 完了済みの GetAssertion に続く GetNextAssertion も、INIT / reset 後は無効にするために保持する。
+     */
+    private val lastOperation = HashMap<Int, Operation>()
 
     /** ホストから受信した出力レポート (64 バイト) を処理する。 */
     fun onReport(report: ByteArray) {
@@ -50,11 +77,15 @@ class CtapHidProcessor(
         synchronized(lock) { handleReport(report) }
     }
 
-    /** 接続断などでトランスポート状態を破棄する。 */
+    /** 接続断・停止などでトランスポート状態を破棄する。実行中の操作は取り消し、その応答は送らない。 */
     fun reset() {
         synchronized(lock) {
             assembly = null
             channels.clear()
+            lastOperation.values.forEach { it.abandoned = true }
+            lastOperation.clear()
+            busy?.abandoned = true
+            busy = null
         }
     }
 
@@ -62,7 +93,12 @@ class CtapHidProcessor(
         val cid = readInt(r, 0)
         val b4 = r[4].toInt() and 0xFF
         val now = clock()
-        assembly?.let { if (now - it.lastPacketAt > TRANSACTION_TIMEOUT_MS) assembly = null }
+        assembly?.let {
+            if (now - it.lastPacketAt > TRANSACTION_TIMEOUT_MS) {
+                assembly = null
+                sendError(it.cid, ERR_MSG_TIMEOUT)
+            }
+        }
 
         if ((b4 and 0x80) == 0) {
             // continuation packet
@@ -97,7 +133,7 @@ class CtapHidProcessor(
                 return
             }
             CMD_CANCEL -> {
-                if (busyCid == cid) onCancel()
+                busy?.takeIf { it.cid == cid }?.cancelled = true
                 return
             }
         }
@@ -105,7 +141,7 @@ class CtapHidProcessor(
             sendError(cid, ERR_INVALID_CHANNEL)
             return
         }
-        if (busyCid != null) {
+        if (busy != null) {
             sendError(cid, ERR_CHANNEL_BUSY)
             return
         }
@@ -141,6 +177,14 @@ class CtapHidProcessor(
             sendError(cid, ERR_INVALID_CHANNEL)
             return
         }
+        if (cid != BROADCAST_CID) {
+            // 割当済みチャネルの再同期: そのチャネルの処理と状態を破棄する。
+            lastOperation.remove(cid)?.abandoned = true
+            if (busy?.cid == cid) {
+                busy?.abandoned = true
+                busy = null
+            }
+        }
         val payload = ByteArrayOutputStream()
         payload.write(nonce)
         writeInt(payload, newCid)
@@ -164,26 +208,40 @@ class CtapHidProcessor(
         when (cmd) {
             CMD_PING -> sendMessage(cid, CMD_PING, payload)
             CMD_WINK -> sendMessage(cid, CMD_WINK, ByteArray(0))
-            CMD_LOCK -> sendMessage(cid, CMD_LOCK, ByteArray(0))
+            // LOCK は未実装 (任意機能)。成功を装わずに未対応として返す。
             CMD_CBOR -> {
                 if (payload.isEmpty()) {
                     sendError(cid, ERR_INVALID_LEN)
                     return
                 }
-                busyCid = cid
-                worker.execute {
-                    val keepAlive = KeepAlive { status -> sendMessage(cid, CMD_KEEPALIVE, byteArrayOf(status.toByte())) }
-                    val response = try {
-                        ctapHandler(payload, keepAlive)
-                    } catch (e: RuntimeException) {
-                        byteArrayOf(0x7F)
-                    }
-                    busyCid = null
-                    sendMessage(cid, CMD_CBOR, response)
+                val op = Operation(cid)
+                busy = op
+                lastOperation[cid] = op
+                try {
+                    worker.execute { runOperation(op, payload) }
+                } catch (e: RejectedExecutionException) {
+                    busy = null
+                    sendError(cid, ERR_OTHER)
                 }
             }
             else -> sendError(cid, ERR_INVALID_CMD)
         }
+    }
+
+    private fun runOperation(op: Operation, payload: ByteArray) {
+        var response: ByteArray? = null
+        try {
+            if (!op.abandoned) {
+                response = try {
+                    ctapHandler(op.cid, payload, op)
+                } catch (e: Exception) {
+                    byteArrayOf(ERR_OTHER.toByte())
+                }
+            }
+        } finally {
+            synchronized(lock) { if (busy === op) busy = null }
+        }
+        if (response != null && !op.abandoned) sendMessage(op.cid, CMD_CBOR, response)
     }
 
     private fun sendError(cid: Int, code: Int) = sendMessage(cid, CMD_ERROR, byteArrayOf(code.toByte()))

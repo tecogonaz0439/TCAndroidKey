@@ -20,7 +20,10 @@ import java.security.MessageDigest
  * 署名アルゴリズムは ES256 (P-256) のみ。clientPIN は未対応で、ユーザー検証は端末内蔵 UV
  * (生体認証・画面ロック資格情報) として [AuthorizationPolicy] に委譲する。
  *
- * 1 つのトランスポートセッションにつき 1 インスタンスを使う (GetNextAssertion の状態を保持するため)。
+ * 1 つのトランスポートにつき 1 インスタンスを使う (GetNextAssertion の状態を保持するため)。
+ *
+ * 認可された操作は [AuthorizationLease] で管理し、鍵の生成・署名の直前と応答を返す直前に有効性を確認する。
+ * GetAssertion の後続 (GetNextAssertion) は、元の操作の Lease・取消トークン・チャネルが有効な間だけ実行できる。
  */
 class Ctap2Authenticator(
     private val store: CredentialStore,
@@ -37,17 +40,30 @@ class Ctap2Authenticator(
         val clientDataHash: ByteArray,
         val flags: Int,
         val userVerified: Boolean,
-        val createdAt: Long
+        val createdAt: Long,
+        /** 元の GetAssertion の認可。停止・前面離脱で無効になる。 */
+        val lease: AuthorizationLease,
+        /** 元の GetAssertion の取消トークン。切断・再同期で無効になる。 */
+        val origin: KeepAlive,
+        /** 元の GetAssertion を受信したチャネル (CTAPHID の CID。NFC は 0)。 */
+        val channel: Int
     )
 
+    // resetSession() は UI スレッドから呼ばれることがあるため、モニターを使わず volatile で更新する。
+    @Volatile
     private var pending: PendingAssertions? = null
 
     /**
      * CTAP2 リクエスト (先頭 1 バイトがコマンド、以降が CBOR パラメータ) を処理し、
      * レスポンス (先頭 1 バイトがステータス、以降が CBOR) を返す。
+     *
+     * 例外は外へ投げない (すべて CTAP ステータスに変換する)。
+     *
+     * @param keepAlive この要求専用の keepalive / 取消トークン。
+     * @param channel 要求を受信したチャネル (CTAPHID の CID)。GetNextAssertion の対応付けに使う。
      */
     @Synchronized
-    fun process(request: ByteArray, keepAlive: KeepAlive = KeepAlive.NONE): ByteArray {
+    fun process(request: ByteArray, keepAlive: KeepAlive = KeepAlive.NONE, channel: Int = 0): ByteArray {
         if (request.isEmpty()) return byteArrayOf(CtapStatus.ERR_INVALID_LENGTH.toByte())
         val command = request[0].toInt() and 0xFF
         if (command != CtapCommand.GET_NEXT_ASSERTION) pending = null
@@ -75,9 +91,9 @@ class Ctap2Authenticator(
                 CtapCommand.GET_ASSERTION -> {
                     val p = params ?: throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
                     rpId = p.text(1)
-                    getAssertion(p, keepAlive)
+                    getAssertion(p, keepAlive, channel)
                 }
-                CtapCommand.GET_NEXT_ASSERTION -> getNextAssertion()
+                CtapCommand.GET_NEXT_ASSERTION -> getNextAssertion(keepAlive, channel)
                 CtapCommand.RESET -> reset(keepAlive)
                 CtapCommand.SELECTION -> selection(keepAlive)
                 else -> throw CtapException(CtapStatus.ERR_INVALID_COMMAND)
@@ -87,14 +103,15 @@ class Ctap2Authenticator(
         } catch (e: CtapException) {
             emit(command, e.status, rpId, userName, e.message)
             byteArrayOf(e.status.toByte())
-        } catch (e: RuntimeException) {
+        } catch (e: Exception) {
+            // Kotlin では IOException / KeyStoreException 等も素通りするため、ここで必ず止める
+            // (トランスポートのワーカースレッドへ漏れるとアプリが終了する)。
             emit(command, CtapStatus.ERR_OTHER, rpId, userName, e.toString())
             byteArrayOf(CtapStatus.ERR_OTHER.toByte())
         }
     }
 
-    /** トランスポートの切断時などに呼び、セッション状態を破棄する。 */
-    @Synchronized
+    /** トランスポートの切断時などに呼び、セッション状態を破棄する。ブロックしない。 */
     fun resetSession() {
         pending = null
     }
@@ -163,16 +180,17 @@ class Ctap2Authenticator(
 
         if (excludeIds.isNotEmpty() && store.findByIds(rpId, excludeIds).isNotEmpty()) {
             // 仕様上はユーザー存在確認を経てから返す。
-            authorizeOrThrow(request, keepAlive)
-            policy.onOperationCompleted(request, false)
+            authorizeOrThrow(request, keepAlive).lease.complete(consumed = false)
             throw CtapException(CtapStatus.ERR_CREDENTIAL_EXCLUDED)
         }
 
         val grant = authorizeOrThrow(request, keepAlive)
         var success = false
+        var created: StoredCredential? = null
         try {
+            ensureActive(grant.lease, keepAlive)
             if (rk) store.deleteDiscoverable(rpId, user.id)
-            val credential = store.create(rpId, rpName, user, rk)
+            val credential = store.create(rpId, rpName, user, rk).also { created = it }
             val flags = AuthDataFlags.UP or AuthDataFlags.AT or (if (grant.userVerified) AuthDataFlags.UV else 0)
             val authData = buildAuthData(rpIdHash(rpId), flags, credential.signCount) {
                 it.write(config.aaguid)
@@ -184,25 +202,29 @@ class Ctap2Authenticator(
             val (fmt, attStmt) = when (config.attestationMode) {
                 AttestationMode.NONE -> "none" to emptyMap<String, Any>()
                 AttestationMode.SELF -> {
+                    ensureActive(grant.lease, keepAlive)
                     val sig = try {
                         store.sign(credential, authData + clientDataHash)
                     } catch (e: KeyUseNotAuthorizedException) {
-                        store.delete(credential.id)
                         throw CtapException(CtapStatus.ERR_OPERATION_DENIED, e.message ?: "key use not authorized")
                     }
                     "packed" to linkedMapOf("alg" to CoseAlgorithm.ES256, "sig" to sig)
                 }
             }
+            // 応答を返す直前にも確認する (停止後に登録結果を送出しない)。
+            ensureActive(grant.lease, keepAlive)
             success = true
             return linkedMapOf(1L to fmt, 2L to authData, 3L to attStmt)
         } finally {
-            policy.onOperationCompleted(request, success)
+            // 応答を返さない登録は残さない。
+            if (!success) created?.let { c -> runCatching { store.delete(c.id) } }
+            grant.lease.complete(consumed = success)
         }
     }
 
     // ------------------------------------------------------------------ GetAssertion
 
-    private fun getAssertion(p: Map<*, *>, keepAlive: KeepAlive): Map<Long, Any> {
+    private fun getAssertion(p: Map<*, *>, keepAlive: KeepAlive, channel: Int): Map<Long, Any> {
         val rpId = p.typedText(1) ?: throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
         val clientDataHash = requireBytes(p, 2)
         val allowIds = credentialIds(p.optList(3))
@@ -214,43 +236,61 @@ class Ctap2Authenticator(
         val request = AuthorizationRequest(CtapOperation.GET_ASSERTION, rpId, null, up, uv)
         checkPinAuth(p.optBytes(6), request, keepAlive)
 
-        val credentials = if (allowIds.isNotEmpty()) {
-            store.findByIds(rpId, allowIds)
-        } else {
-            store.findDiscoverable(rpId)
-        }
-        if (credentials.isEmpty()) throw CtapException(CtapStatus.ERR_NO_CREDENTIALS)
-
+        // credential の有無は、認可 (受付状態の確認) を経てから返す (認可前の存在確認を防ぐ)。
         val grant = authorizeOrThrow(request, keepAlive)
-        val userPresent = up && grant.userPresent
-        val userVerified = userPresent && grant.userVerified
-        val flags = (if (userPresent) AuthDataFlags.UP else 0) or (if (userVerified) AuthDataFlags.UV else 0)
-        val rpIdHash = rpIdHash(rpId)
-
         var success = false
+        var userPresent = false
         try {
+            val credentials = if (allowIds.isNotEmpty()) {
+                store.findByIds(rpId, allowIds)
+            } else {
+                store.findDiscoverable(rpId)
+            }
+            if (credentials.isEmpty()) throw CtapException(CtapStatus.ERR_NO_CREDENTIALS)
+
+            userPresent = up && grant.userPresent
+            val userVerified = userPresent && grant.userVerified
+            val flags = (if (userPresent) AuthDataFlags.UP else 0) or (if (userVerified) AuthDataFlags.UV else 0)
+            val rpIdHash = rpIdHash(rpId)
+
             val first = credentials.first()
-            val response = assertionResponse(first, rpIdHash, clientDataHash, flags, userVerified, allowIds.isEmpty())
+            val response = assertionResponse(
+                first, rpIdHash, clientDataHash, flags, userVerified, allowIds.isEmpty(), grant.lease, keepAlive
+            )
             if (allowIds.isEmpty() && credentials.size > 1) {
                 response[5L] = credentials.size.toLong()
-                pending = PendingAssertions(credentials, 1, rpIdHash, clientDataHash, flags, userVerified, clock())
+                pending = PendingAssertions(
+                    credentials, 1, rpIdHash, clientDataHash, flags, userVerified, clock(),
+                    lease = grant.lease, origin = keepAlive, channel = channel
+                )
             }
             success = true
             return response
         } finally {
-            if (userPresent) policy.onOperationCompleted(request, success)
+            grant.lease.complete(consumed = success && userPresent)
         }
     }
 
-    private fun getNextAssertion(): Map<Long, Any> {
+    private fun getNextAssertion(keepAlive: KeepAlive, channel: Int): Map<Long, Any> {
         val state = pending ?: throw CtapException(CtapStatus.ERR_NOT_ALLOWED)
-        if (clock() - state.createdAt > NEXT_ASSERTION_TIMEOUT_MS || state.nextIndex >= state.credentials.size) {
+        val reason = when {
+            state.channel != channel -> "different channel"
+            clock() - state.createdAt > NEXT_ASSERTION_TIMEOUT_MS -> "timeout"
+            state.nextIndex >= state.credentials.size -> "no more credentials"
+            state.origin.isCancelled || keepAlive.isCancelled -> "transport reset or cancelled"
+            !state.lease.isValid() -> "authorization revoked"
+            else -> null
+        }
+        if (reason != null) {
             pending = null
-            throw CtapException(CtapStatus.ERR_NOT_ALLOWED)
+            throw CtapException(CtapStatus.ERR_NOT_ALLOWED, reason)
         }
         val credential = state.credentials[state.nextIndex++]
         if (state.nextIndex >= state.credentials.size) pending = null
-        return assertionResponse(credential, state.rpIdHash, state.clientDataHash, state.flags, state.userVerified, true)
+        return assertionResponse(
+            credential, state.rpIdHash, state.clientDataHash, state.flags, state.userVerified, true,
+            state.lease, keepAlive
+        )
     }
 
     private fun assertionResponse(
@@ -259,8 +299,11 @@ class Ctap2Authenticator(
         clientDataHash: ByteArray,
         flags: Int,
         userVerified: Boolean,
-        includeUser: Boolean
+        includeUser: Boolean,
+        lease: AuthorizationLease,
+        keepAlive: KeepAlive
     ): MutableMap<Long, Any> {
+        ensureActive(lease, keepAlive)
         val counter = store.incrementSignCount(credential)
         val authData = buildAuthData(rpIdHash, flags, counter) {}
         val signature = try {
@@ -268,6 +311,8 @@ class Ctap2Authenticator(
         } catch (e: KeyUseNotAuthorizedException) {
             throw CtapException(CtapStatus.ERR_OPERATION_DENIED, e.message ?: "key use not authorized")
         }
+        // 応答を返す直前にも確認する (停止後に署名を送出しない)。
+        ensureActive(lease, keepAlive)
         val response = linkedMapOf<Long, Any>(
             1L to linkedMapOf("id" to credential.id, "type" to "public-key"),
             2L to authData,
@@ -289,15 +334,21 @@ class Ctap2Authenticator(
     private fun reset(keepAlive: KeepAlive): Map<Long, Any>? {
         val request = AuthorizationRequest(CtapOperation.RESET, null, null, true, true)
         if (!configProvider().allowReset) throw CtapException(CtapStatus.ERR_OPERATION_DENIED, "reset disabled in settings")
-        authorizeOrThrow(request, keepAlive)
-        store.deleteAll()
-        policy.onOperationCompleted(request, true)
+        val grant = authorizeOrThrow(request, keepAlive)
+        var success = false
+        try {
+            ensureActive(grant.lease, keepAlive)
+            store.deleteAll()
+            success = true
+        } finally {
+            grant.lease.complete(consumed = success)
+        }
         return null
     }
 
     private fun selection(keepAlive: KeepAlive): Map<Long, Any>? {
         val request = AuthorizationRequest(CtapOperation.SELECTION, null, null, true, false)
-        authorizeOrThrow(request, keepAlive)
+        authorizeOrThrow(request, keepAlive).lease.complete(consumed = false)
         return null
     }
 
@@ -309,6 +360,12 @@ class Ctap2Authenticator(
             is AuthorizationResult.Denied -> throw CtapException(r.status, r.reason)
         }
 
+    /** 鍵操作・応答の直前に、操作が取り消されていないこと・認可が失効していないことを確認する。 */
+    private fun ensureActive(lease: AuthorizationLease, keepAlive: KeepAlive) {
+        if (keepAlive.isCancelled) throw CtapException(CtapStatus.ERR_KEEPALIVE_CANCEL, "cancelled")
+        if (!lease.isValid()) throw CtapException(CtapStatus.ERR_OPERATION_DENIED, "authorization revoked")
+    }
+
     /**
      * clientPIN 非対応の認証器としての pinAuth / pinUvAuthParam の扱い。
      * 長さ 0 の pinAuth はプラットフォームによる「タッチ待ち」プローブであり、存在確認後に PIN_NOT_SET を返す。
@@ -316,7 +373,7 @@ class Ctap2Authenticator(
     private fun checkPinAuth(pinAuth: ByteArray?, request: AuthorizationRequest, keepAlive: KeepAlive) {
         if (pinAuth == null) return
         if (pinAuth.isEmpty()) {
-            authorizeOrThrow(request.copy(requireUserVerification = false), keepAlive)
+            authorizeOrThrow(request.copy(requireUserVerification = false), keepAlive).lease.complete(consumed = false)
             throw CtapException(CtapStatus.ERR_PIN_NOT_SET)
         }
         throw CtapException(CtapStatus.ERR_PIN_AUTH_INVALID)

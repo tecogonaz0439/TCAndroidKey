@@ -19,13 +19,11 @@ import java.util.concurrent.Executor
 class CtapHidProcessorTest {
 
     private val sent = mutableListOf<ByteArray>()
-    private var cancelled = false
     private val auth = Ctap2Authenticator(InMemoryCredentialStore(), FakePolicy(), { AuthenticatorConfig(ByteArray(16)) }, "hid")
     private val direct = Executor { it.run() }
     private val processor = CtapHidProcessor(
-        ctapHandler = { req, ka -> ka.send(KeepAlive.STATUS_PROCESSING); auth.process(req, ka) },
+        ctapHandler = { cid, req, ka -> ka.send(KeepAlive.STATUS_PROCESSING); auth.process(req, ka, cid) },
         sendReport = { sent += it },
-        onCancel = { cancelled = true },
         worker = direct
     )
 
@@ -139,27 +137,135 @@ class CtapHidProcessorTest {
         assertEquals(CtapHidProcessor.ERR_INVALID_SEQ, payload[0].toInt())
     }
 
+    // ------------------------------------------------------------------ 取消・再同期・例外 (S-03, F-12)
+
+    /** execute された処理を手動で実行するエグゼキュータ。 */
+    private class ManualExecutor : Executor {
+        val tasks = ArrayDeque<Runnable>()
+        override fun execute(command: Runnable) { tasks += command }
+        fun runAll() { while (tasks.isNotEmpty()) tasks.removeFirst().run() }
+    }
+
+    private inner class Harness(val handler: (Int, ByteArray, KeepAlive) -> ByteArray) {
+        val out = mutableListOf<ByteArray>()
+        val worker = ManualExecutor()
+        val p = CtapHidProcessor(handler, { out += it }, worker)
+
+        fun init(cid: Int = CtapHidProcessor.BROADCAST_CID): Int {
+            p.onReport(initPacket(cid, CtapHidProcessor.CMD_INIT, ByteArray(8)))
+            val r = out.last()
+            return ((r[15].toInt() and 0xFF) shl 24) or ((r[16].toInt() and 0xFF) shl 16) or
+                ((r[17].toInt() and 0xFF) shl 8) or (r[18].toInt() and 0xFF)
+        }
+
+        fun cmds(): List<Int> = out.map { it[4].toInt() and 0xFF }
+    }
+
     @Test
-    fun cancelWhileBusyInvokesCallback() {
-        var pendingTask: Runnable? = null
-        val sent2 = mutableListOf<ByteArray>()
-        var cancel = false
-        val p = CtapHidProcessor(
-            ctapHandler = { _, _ -> byteArrayOf(0x2D) },
-            sendReport = { sent2 += it },
-            onCancel = { cancel = true },
-            worker = { pendingTask = it }
-        )
-        p.onReport(initPacket(CtapHidProcessor.BROADCAST_CID, CtapHidProcessor.CMD_INIT, ByteArray(8)))
-        val initResp = sent2.last()
-        val cid = ((initResp[15].toInt() and 0xFF) shl 24) or ((initResp[16].toInt() and 0xFF) shl 16) or
-            ((initResp[17].toInt() and 0xFF) shl 8) or (initResp[18].toInt() and 0xFF)
-        p.onReport(initPacket(cid, CtapHidProcessor.CMD_CBOR, byteArrayOf(0x02, 0xA0.toByte())))
-        p.onReport(initPacket(cid, CtapHidProcessor.CMD_CANCEL, ByteArray(0)))
-        assertTrue(cancel)
-        pendingTask!!.run()
-        val last = sent2.last()
+    fun cancelReceivedBeforeTheWorkerStartsIsNotLost() {
+        var seenCancelled: Boolean? = null
+        val h = Harness { _, _, ka ->
+            seenCancelled = ka.isCancelled
+            byteArrayOf(if (ka.isCancelled) 0x2D else 0x00)
+        }
+        val cid = h.init()
+        h.out.clear()
+        h.p.onReport(initPacket(cid, CtapHidProcessor.CMD_CBOR, byteArrayOf(0x02, 0xA0.toByte())))
+        h.p.onReport(initPacket(cid, CtapHidProcessor.CMD_CANCEL, ByteArray(0)))
+        h.worker.runAll()
+        assertEquals(true, seenCancelled)
+        val last = h.out.last()
         assertEquals(CtapHidProcessor.CMD_CBOR, last[4].toInt() and 0xFF)
         assertEquals(0x2D, last[7].toInt())
+    }
+
+    @Test
+    fun cancelOnAnotherChannelIsIgnored() {
+        var seenCancelled: Boolean? = null
+        val h = Harness { _, _, ka -> seenCancelled = ka.isCancelled; byteArrayOf(0) }
+        val cid = h.init()
+        val other = h.init()
+        h.p.onReport(initPacket(cid, CtapHidProcessor.CMD_CBOR, byteArrayOf(0x04)))
+        h.p.onReport(initPacket(other, CtapHidProcessor.CMD_CANCEL, ByteArray(0)))
+        h.worker.runAll()
+        assertEquals(false, seenCancelled)
+    }
+
+    @Test
+    fun initOnTheBusyChannelAbandonsTheOperation() {
+        var calls = 0
+        val h = Harness { _, _, _ -> calls++; byteArrayOf(0) }
+        val cid = h.init()
+        h.p.onReport(initPacket(cid, CtapHidProcessor.CMD_CBOR, byteArrayOf(0x04)))
+        h.init(cid) // 再同期
+        h.out.clear()
+        h.worker.runAll()
+        assertEquals("abandoned operation is not executed", 0, calls)
+        assertTrue("no response for the abandoned request", h.out.isEmpty())
+        // 再同期後は BUSY にならない
+        h.p.onReport(initPacket(cid, CtapHidProcessor.CMD_CBOR, byteArrayOf(0x04)))
+        h.worker.runAll()
+        assertEquals(listOf(CtapHidProcessor.CMD_CBOR), h.cmds())
+        assertEquals(1, calls)
+    }
+
+    @Test
+    fun resetDuringAnOperationSuppressesItsResponse() {
+        lateinit var h: Harness
+        h = Harness { _, _, ka ->
+            h.p.reset() // 処理中に切断
+            ka.send(KeepAlive.STATUS_UP_NEEDED)
+            assertTrue(ka.isCancelled)
+            byteArrayOf(0)
+        }
+        val cid = h.init()
+        h.p.onReport(initPacket(cid, CtapHidProcessor.CMD_CBOR, byteArrayOf(0x04)))
+        h.out.clear()
+        h.worker.runAll()
+        assertTrue("neither keepalive nor response after reset", h.out.isEmpty())
+    }
+
+    @Test
+    fun checkedExceptionFromTheHandlerReturnsErrorAndClearsBusy() {
+        val h = Harness { _, _, _ -> throw java.io.IOException("boom") }
+        val cid = h.init()
+        h.out.clear()
+        h.p.onReport(initPacket(cid, CtapHidProcessor.CMD_CBOR, byteArrayOf(0x04)))
+        h.worker.runAll()
+        assertEquals(CtapHidProcessor.CMD_CBOR, h.out.last()[4].toInt() and 0xFF)
+        assertEquals(CtapHidProcessor.ERR_OTHER, h.out.last()[7].toInt() and 0xFF)
+        h.out.clear()
+        h.p.onReport(initPacket(cid, CtapHidProcessor.CMD_PING, byteArrayOf(1)))
+        assertEquals(listOf(CtapHidProcessor.CMD_PING), h.cmds())
+    }
+
+    @Test
+    fun otherChannelIsBusyWhileAnOperationIsPending() {
+        val h = Harness { _, _, _ -> byteArrayOf(0) }
+        val cid = h.init()
+        val other = h.init()
+        h.p.onReport(initPacket(cid, CtapHidProcessor.CMD_CBOR, byteArrayOf(0x04)))
+        h.out.clear()
+        h.p.onReport(initPacket(other, CtapHidProcessor.CMD_PING, byteArrayOf(1)))
+        assertEquals(CtapHidProcessor.ERR_CHANNEL_BUSY, h.out.single()[7].toInt())
+    }
+
+    @Test
+    fun lockIsNotImplemented() {
+        val cid = init()
+        send(cid, CtapHidProcessor.CMD_LOCK, byteArrayOf(5))
+        val (cmd, payload) = messages().single()
+        assertEquals(CtapHidProcessor.CMD_ERROR, cmd)
+        assertEquals(CtapHidProcessor.ERR_INVALID_CMD, payload[0].toInt())
+    }
+
+    @Test
+    fun channelIsPassedToTheAuthenticator() {
+        var seen = 0
+        val h = Harness { c, _, _ -> seen = c; byteArrayOf(0) }
+        val cid = h.init()
+        h.p.onReport(initPacket(cid, CtapHidProcessor.CMD_CBOR, byteArrayOf(0x04)))
+        h.worker.runAll()
+        assertEquals(cid, seen)
     }
 }
