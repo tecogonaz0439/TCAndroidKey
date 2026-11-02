@@ -16,3 +16,4 @@ build/
 !app/debug.keystore
 __pycache__/
 *.pyc
+/review/*.zip
