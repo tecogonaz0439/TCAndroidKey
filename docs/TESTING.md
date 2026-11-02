@@ -34,7 +34,7 @@
 2. **CTAP レベルの確認 (推奨・最初に実施)**
 
    ```bash
-   py -m pip install "fido2[pcsc]"
+   py -m pip install "fido2[pcsc]==2.0.0"
    ```
 
    ```bash
@@ -62,7 +62,7 @@
 2. **CTAP レベルの確認 (主)**
 
    ```bash
-   python3 -m pip install "fido2[pcsc]"
+   python3 -m pip install "fido2[pcsc]==2.0.0"
    ```
 
    ```bash

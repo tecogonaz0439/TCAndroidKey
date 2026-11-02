@@ -7,8 +7,13 @@ TCAndroidKey の動作確認用スクリプト (PC/SC NFC リーダー経由)。
 Windows 11 / macOS + Sony RC-S300 などの PC/SC リーダーで、ブラウザを介さずに
 CTAP2 の GetInfo → MakeCredential → GetAssertion を実行し、署名を検証する。
 
-準備:
-    python3 -m pip install "fido2[pcsc]"
+準備 (動作確認の基準版は python-fido2 2.0.0):
+    python3 -m pip install "fido2[pcsc]==2.0.0"
+
+検証内容:
+    - fmt "packed" (自己アテステーション) の場合は署名を暗号学的に検証する。検証できなければ失敗 (終了コード 1)
+    - fmt "none" の場合は attStmt が空であることを確認する (署名検証はない)
+    - アサーションの署名を登録時の公開鍵で検証する
 
 使い方:
     1. Android 端末で TCAndroidKey を開き「本人確認して開始」を実行する
@@ -24,10 +29,12 @@ import sys
 import time
 
 try:
+    import fido2
+    from fido2.attestation import PackedAttestation
     from fido2.ctap2 import Ctap2
     from fido2.pcsc import CtapPcscDevice
 except ImportError:
-    sys.exit('python-fido2 が必要です: python3 -m pip install "fido2[pcsc]"')
+    sys.exit('python-fido2 が必要です: python3 -m pip install "fido2[pcsc]==2.0.0"')
 
 RP_ID = "tcandroidkey.test"
 
@@ -54,6 +61,7 @@ def main():
     ap.add_argument("--timeout", type=float, default=30)
     args = ap.parse_args()
 
+    print(f"python-fido2 {getattr(fido2, '__version__', '?')}")
     dev = find_device(args.timeout)
     print(f"device: {dev}")
     ctap = Ctap2(dev)
@@ -78,9 +86,19 @@ def main():
     cred = att.auth_data.credential_data
     print(f"\n[MakeCredential] fmt={att.fmt} flags=0x{att.auth_data.flags:02x} "
           f"credId={cred.credential_id.hex()[:16]}…")
-    if att.fmt == "packed" and hasattr(att, "verify"):
-        att.verify(cdh)
-        print("  self attestation signature: OK")
+    if att.fmt == "packed":
+        # 失敗時は例外 (InvalidSignature 等) で終了する。検証を省略して成功にしない。
+        try:
+            PackedAttestation().verify(att.att_stmt, att.auth_data, cdh)
+        except Exception as e:
+            sys.exit(f"  self attestation signature: NG ({e!r})")
+        print("  attestation: packed (self) — signature verified")
+    elif att.fmt == "none":
+        if att.att_stmt:
+            sys.exit(f"  attestation: none but attStmt is not empty: {att.att_stmt!r}")
+        print("  attestation: none — structure OK (no signature to verify)")
+    else:
+        sys.exit(f"  unexpected attestation format: {att.fmt}")
 
     dev = wait_rearm(dev, "ワンタイム設定が ON の場合は、アプリで再度「本人確認して開始」を実行してください。")
     ctap = Ctap2(dev)

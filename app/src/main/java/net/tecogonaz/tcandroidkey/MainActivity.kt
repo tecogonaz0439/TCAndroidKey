@@ -19,6 +19,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
@@ -90,18 +91,22 @@ class MainActivity : ComponentActivity() {
                 AppTheme.LIGHT -> false
                 AppTheme.DARK -> true
             }
-            enableEdgeToEdge(
-                statusBarStyle = if (useDarkTheme) {
-                    SystemBarStyle.dark(scrim = AndroidColor.TRANSPARENT)
-                } else {
-                    SystemBarStyle.light(scrim = AndroidColor.TRANSPARENT, darkScrim = AndroidColor.TRANSPARENT)
-                },
-                navigationBarStyle = if (useDarkTheme) {
-                    SystemBarStyle.dark(scrim = AndroidColor.TRANSPARENT)
-                } else {
-                    SystemBarStyle.light(scrim = AndroidColor.TRANSPARENT, darkScrim = AndroidColor.TRANSPARENT)
-                }
-            )
+            // システムバーの配色はテーマが変わったときだけ更新する (Composition 本体で Window を操作しない)。
+            DisposableEffect(useDarkTheme) {
+                enableEdgeToEdge(
+                    statusBarStyle = if (useDarkTheme) {
+                        SystemBarStyle.dark(scrim = AndroidColor.TRANSPARENT)
+                    } else {
+                        SystemBarStyle.light(scrim = AndroidColor.TRANSPARENT, darkScrim = AndroidColor.TRANSPARENT)
+                    },
+                    navigationBarStyle = if (useDarkTheme) {
+                        SystemBarStyle.dark(scrim = AndroidColor.TRANSPARENT)
+                    } else {
+                        SystemBarStyle.light(scrim = AndroidColor.TRANSPARENT, darkScrim = AndroidColor.TRANSPARENT)
+                    }
+                )
+                onDispose {}
+            }
             TCAndroidKeyTheme(darkTheme = useDarkTheme) {
                 AppRoot(viewModel = viewModel, actions = actions)
             }

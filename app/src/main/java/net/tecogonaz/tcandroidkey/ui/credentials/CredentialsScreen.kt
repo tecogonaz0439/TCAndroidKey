@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.VpnKey
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ButtonDefaults
@@ -39,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -145,7 +147,7 @@ fun CredentialsScreen(viewModel: MainViewModel, actions: UiActions) {
             text = {
                 Text(
                     if (unavailable) stringResource(R.string.dialog_initialize_storage_message)
-                    else stringResource(R.string.dialog_delete_all_message, credentials.size)
+                    else pluralStringResource(R.plurals.dialog_delete_all_message, credentials.size, credentials.size)
                 )
             },
             confirmButton = {
@@ -242,8 +244,15 @@ private fun CredentialCard(credential: StoredCredential, onDelete: () -> Unit) {
                             Text(stringResource(if (credential.discoverable) R.string.credential_discoverable else R.string.credential_non_discoverable))
                         }
                     )
+                    val weakKey = credential.securityLevel == KeySecurityLevel.SOFTWARE ||
+                        credential.securityLevel == KeySecurityLevel.UNKNOWN
                     AssistChip(
                         onClick = {},
+                        leadingIcon = if (weakKey) {
+                            { Icon(Icons.Outlined.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) }
+                        } else {
+                            null
+                        },
                         label = {
                             Text(
                                 stringResource(
@@ -256,6 +265,13 @@ private fun CredentialCard(credential: StoredCredential, onDelete: () -> Unit) {
                                 )
                             )
                         }
+                    )
+                }
+                if (credential.securityLevel == KeySecurityLevel.SOFTWARE || credential.securityLevel == KeySecurityLevel.UNKNOWN) {
+                    Text(
+                        text = stringResource(R.string.credential_weak_key_warning),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
             }

@@ -46,6 +46,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -160,7 +161,7 @@ fun AuthenticatorScreen(
                 TransportRow(
                     icon = Icons.Outlined.Memory,
                     title = stringResource(if (capabilities.hasStrongBox) R.string.keystore_strongbox else R.string.keystore_tee),
-                    status = stringResource(R.string.keystore_credential_count, credentials.size),
+                    status = pluralStringResource(R.plurals.keystore_credential_count, credentials.size, credentials.size),
                     ok = true,
                     actionLabel = stringResource(R.string.action_manage_credentials),
                     onAction = onShowCredentials
@@ -213,12 +214,16 @@ private fun StatusCard(
                     modifier = Modifier.size(40.dp)
                 )
                 Spacer(modifier = Modifier.size(16.dp))
-                Column(modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
+                Column {
+                    // live region は受付開始・終了の状態変化だけを読み上げる (毎秒変わる残り時間は含めない)。
                     Text(
                         text = stringResource(if (armed) R.string.status_armed_title else R.string.status_idle_title),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.semantics { heading() }
+                        modifier = Modifier.semantics {
+                            heading()
+                            liveRegion = LiveRegionMode.Polite
+                        }
                     )
                     if (armed) {
                         Text(

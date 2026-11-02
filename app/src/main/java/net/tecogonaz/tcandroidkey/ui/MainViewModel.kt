@@ -68,7 +68,12 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     fun deleteCredential(credential: StoredCredential) {
         viewModelScope.launch(Dispatchers.IO) {
             runCatching { container.credentialStore.delete(credential.id) }
-                .onSuccess { container.eventLog.log(LogLevel.INFO, "Keystore", "deleted credential for ${credential.rpId}") }
+                .onSuccess {
+                    container.eventLog.log(
+                        LogLevel.INFO, "Keystore", "deleted credential for ${credential.rpId}",
+                        logcatMessage = "deleted a credential"
+                    )
+                }
                 .onFailure { container.eventLog.log(LogLevel.ERROR, "Keystore", "failed to delete credential: ${it.message}") }
         }
     }

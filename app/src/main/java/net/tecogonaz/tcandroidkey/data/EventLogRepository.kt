@@ -25,20 +25,27 @@ data class LogEntry(
 /**
  * 認証器の動作ログ (メモリ内のみ・プロセス終了で消去)。
  * プライバシー保護のため永続化しない。
+ *
+ * 開発時の確認用に logcat にも出力するが、logcat には RP ID・ユーザー名などの識別情報を含めない
+ * (ADB・バグレポート等から読めるため)。詳細はアプリ内のログ画面でのみ確認できる。
  */
 class EventLogRepository(private val maxEntries: Int = 300) {
     private val _entries = MutableStateFlow<List<LogEntry>>(emptyList())
     val entries: StateFlow<List<LogEntry>> = _entries.asStateFlow()
     private var nextId = 0L
 
+    /**
+     * @param message アプリ内のログに表示する内容 (RP ID・ユーザー名を含めてよい)。
+     * @param logcatMessage logcat に出力する内容。識別情報を含む [message] の場合は、それを除いたものを渡す。
+     */
     @Synchronized
-    fun log(level: LogLevel, source: String, message: String) {
+    fun log(level: LogLevel, source: String, message: String, logcatMessage: String = message) {
         val entry = LogEntry(nextId++, System.currentTimeMillis(), level, source, message)
         _entries.update { (listOf(entry) + it).take(maxEntries) }
         when (level) {
-            LogLevel.ERROR -> Log.e(TAG, "[$source] $message")
-            LogLevel.WARNING -> Log.w(TAG, "[$source] $message")
-            else -> Log.i(TAG, "[$source] $message")
+            LogLevel.ERROR -> Log.e(TAG, "[$source] $logcatMessage")
+            LogLevel.WARNING -> Log.w(TAG, "[$source] $logcatMessage")
+            else -> Log.i(TAG, "[$source] $logcatMessage")
         }
     }
 
@@ -49,15 +56,15 @@ class EventLogRepository(private val maxEntries: Int = 300) {
             event.status == CtapStatus.ERR_NO_CREDENTIALS -> LogLevel.WARNING
             else -> LogLevel.ERROR
         }
+        val result = "${CtapCommand.name(event.command)} → ${CtapStatus.name(event.status)}"
+        val detail = if (!event.isSuccess) event.detail?.let { " ($it)" } ?: "" else ""
         val msg = buildString {
-            append(CtapCommand.name(event.command))
-            append(" → ")
-            append(CtapStatus.name(event.status))
+            append(result)
             event.rpId?.let { append(" rp=").append(it) }
             event.userName?.let { append(" user=").append(it) }
-            if (!event.isSuccess) event.detail?.let { append(" (").append(it).append(")") }
+            append(detail)
         }
-        log(level, event.transport, msg)
+        log(level, event.transport, msg, logcatMessage = result + detail)
     }
 
     fun clear() {

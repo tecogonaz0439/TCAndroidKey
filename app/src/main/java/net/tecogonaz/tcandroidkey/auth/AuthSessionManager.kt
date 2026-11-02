@@ -118,7 +118,12 @@ class AuthSessionManager(
         AuthorizationPolicy { request: AuthorizationRequest, keepAlive: KeepAlive ->
             val result = gate.authorize(request, keepAlive, blocking) {
                 requestVerification(transport, request.rpId)
-                if (blocking) log.log(LogLevel.INFO, transport, "waiting for user verification (${request.rpId ?: "-"})")
+                if (blocking) {
+                    log.log(
+                        LogLevel.INFO, transport, "waiting for user verification (${request.rpId ?: "-"})",
+                        logcatMessage = "waiting for user verification"
+                    )
+                }
             }
             if (result is AuthorizationResult.Denied && result.reason.startsWith("another operation")) {
                 log.log(LogLevel.WARNING, transport, "rejected: another operation is using the one-time authorization")

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name" translatable="false">TCAndroidKey</string>
 
     <!-- Navigation -->
@@ -54,7 +54,10 @@
     <string name="section_key_storage">Key storage</string>
     <string name="keystore_strongbox">Android Keystore (StrongBox available)</string>
     <string name="keystore_tee">Android Keystore (TEE)</string>
-    <string name="keystore_credential_count">%1$d credential(s) stored</string>
+    <plurals name="keystore_credential_count">
+        <item quantity="one">%1$d credential stored</item>
+        <item quantity="other">%1$d credentials stored</item>
+    </plurals>
     <string name="action_manage_credentials">Manage</string>
 
     <!-- Events -->
@@ -76,13 +79,17 @@
     <string name="security_level_tee">TEE</string>
     <string name="security_level_software">Software</string>
     <string name="security_level_unknown">Unknown</string>
+    <string name="credential_weak_key_warning">This key is not protected by secure hardware (TEE / StrongBox).</string>
     <string name="action_delete">Delete</string>
     <string name="action_delete_all">Delete all</string>
     <string name="action_cancel">Cancel</string>
     <string name="dialog_delete_title">Delete credential?</string>
     <string name="dialog_delete_message">The key for %1$s (%2$s) will be permanently deleted.</string>
     <string name="dialog_delete_all_title">Delete all credentials?</string>
-    <string name="dialog_delete_all_message">All %1$d key(s) stored by this app will be permanently deleted.</string>
+    <plurals name="dialog_delete_all_message">
+        <item quantity="one">The %1$d key stored by this app will be permanently deleted.</item>
+        <item quantity="other">All %1$d keys stored by this app will be permanently deleted.</item>
+    </plurals>
     <string name="credentials_unavailable_title">Saved credentials cannot be read</string>
     <string name="credentials_unavailable_message">The credential metadata could not be read. Registration and authentication are stopped so that the existing data is not overwritten. Initialize to delete all keys and start over.</string>
     <string name="action_initialize_storage">Initialize (delete all)</string>
@@ -111,7 +118,10 @@
     <string name="settings_category_verification">User verification</string>
     <string name="settings_auth_window">Authorization window</string>
     <string name="settings_auth_window_help">How long authentication is accepted after you verify yourself.</string>
-    <string name="settings_seconds">%1$d seconds</string>
+    <plurals name="settings_seconds">
+        <item quantity="one">%1$d second</item>
+        <item quantity="other">%1$d seconds</item>
+    </plurals>
     <string name="settings_one_time">One authentication per verification</string>
     <string name="settings_one_time_help">End the authorization after one registration or sign-in.</string>
     <string name="settings_biometric_only">Biometrics only</string>
@@ -138,7 +148,7 @@
     <string name="about_version">Version</string>
     <string name="about_aaguid">AAGUID</string>
     <string name="about_protocols">Protocols</string>
-    <string name="about_protocols_value">CTAP 2.0 (FIDO_2_0) over NFC (ISO 7816-4 / HCE), CTAPHID over Bluetooth HID (experimental)</string>
+    <string name="about_protocols_value" tools:ignore="TypographyDashes">CTAP 2.0 (FIDO_2_0) over NFC (ISO 7816-4 / HCE), CTAPHID over Bluetooth HID (experimental)</string>
     <string name="about_algorithms">Algorithms</string>
     <string name="about_security">Security</string>
     <string name="about_security_text">Private keys are generated in the Android Keystore (StrongBox or TEE) and cannot be exported. Each key can be used only for a limited time after user verification, only while the device is unlocked, and only while this app is in the foreground.</string>

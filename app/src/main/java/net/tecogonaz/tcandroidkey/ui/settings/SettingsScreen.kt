@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -62,7 +63,7 @@ fun SettingsScreen(viewModel: MainViewModel, actions: UiActions) {
             SettingItemDropdown(
                 title = stringResource(R.string.settings_auth_window),
                 selected = settings.authWindowSeconds,
-                options = AppSettings.AUTH_WINDOW_CHOICES.map { it to stringResource(R.string.settings_seconds, it) },
+                options = AppSettings.AUTH_WINDOW_CHOICES.map { it to pluralStringResource(R.plurals.settings_seconds, it, it) },
                 onSelected = { sec -> viewModel.updateSettings { it.copy(authWindowSeconds = sec) } }
             )
             SettingsHelpText(stringResource(R.string.settings_auth_window_help))
