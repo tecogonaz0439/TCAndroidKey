@@ -7,7 +7,7 @@
 
 | ID | 制約 | 影響 | 回避策 |
 |---|---|---|---|
-| L-01 | clientPIN 非対応 | RP / クライアントが PIN 設定済みの認証器を要求する場合に登録できない | RP の userVerification を `preferred` 等にする |
+| L-01 | clientPIN 非対応 | RP / クライアントが PIN 設定済みの認証器を要求する場合に登録できない。python-fido2 2.0.0 の `Fido2Client` は UV required で PIN/UV プロトコルの選択に失敗する (DD-10 §4 注 1) | RP の userVerification を `preferred` 等にする。python-fido2 は低水準 `Ctap2` を使う |
 | L-02 | CTAP 2.1 非対応 (versions は `FIDO_2_0` のみ) | credProtect、credentialManagement、authenticatorConfig 等が使えない | — |
 | L-03 | U2F (CTAP1) 非対応 | U2F 専用の古い RP で使えない | — |
 | L-04 | 拡張 (hmac-secret, credProtect, largeBlob, minPinLength 等) 非対応 | 拡張を必須とする RP で使えない | — |
@@ -18,6 +18,8 @@
 | L-09 | macOS の Chrome は NFC (PC/SC) セキュリティキー非対応 | macOS ブラウザでの NFC 試験が限定される | python-fido2、Safari (要確認) |
 | L-10 | 鍵のバックアップ・移行不可 | 端末の変更・アンインストールで鍵が失われる | テスト用アカウントを使う (PRE-04) |
 | L-11 | ベンダーアテステーションなし | アテステーションを検証・制限する RP で登録できない | RP 側で自己アテステーション / none を許可する |
+| L-12 | タッチ確認用のダミー登録を区別しない | CTAP 2.0 認証器にダミーの MakeCredential でタッチ確認するクライアントでは、ワンタイムが消費される (BD-04 §5 注) | ワンタイム OFF にする / 再度本人確認する |
+| L-13 | メタデータの巻き戻しを検出しない | 署名カウンタが戻り得る (BD-05 R-05) | — (想定外の攻撃者) |
 
 ## 2. 今後の課題 (候補)
 
@@ -30,5 +32,7 @@
 | F-05 | hmac-secret 拡張 | PRF 拡張を使う RP の試験に対応する | 低 |
 | F-06 | U2F (CTAP1) | U2F の RP の試験に対応する | 低 |
 | F-07 | 試験用の操作機能 | 署名カウンタの手動設定・UV フラグを立てない応答など、RP の異常系試験用の機能 (テスト用ツールとしての拡張) | 中 |
-| F-08 | Android 依存部分の自動テスト | `AuthSessionManager` の JVM テスト化、計装テスト (Keystore・HCE) | 中 |
+| F-08 | Android 依存部分の自動テスト | 認可判定は `AuthorizationGate` として JVM テスト済み (1.1)。残りは計装テスト (Keystore の読み込み失敗・保存失敗、HCE の切断・再接続、Bluetooth の登録解除) | 中 |
 | F-09 | release ビルドでの R8 確認 | 縮小・難読化後の動作確認 | 中 |
+| F-10 | 非公開の debug 署名鍵の選択 | 環境変数で非公開の署名鍵を指定でき、未指定時は共通 debug 鍵で署名する (BD-05 R-06)。切り替え時はアンインストールと再登録が必要 | 低 |
+| F-11 | 外部レビュー指摘の実機確認 | DD-10 IT-24〜32 (切断・停止・同時要求・Bluetooth 復帰・TalkBack・文字サイズ・タッチ確認・メタデータ破損) | 高 |

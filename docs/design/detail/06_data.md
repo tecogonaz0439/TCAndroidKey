@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCAK-DD-06 |
-| 版数 | 1.0 |
+| 版数 | 1.1 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.1 (2026-11-02): 外部レビュー対応 (等価性・順序、読み込み失敗の扱い、logcat 出力、巻き戻しの非検出)。`review/FIX_PLAN.md` |
 | 実装 | `fido-core/.../ctap2/CredentialStore.kt`, `app/.../keystore/MetadataStore.kt`, `data/SettingsRepository.kt`, `data/EventLogRepository.kt` |
 | 関連要件 | FR-07, FR-17, FR-18, SEC-05, SEC-06, SEC-08 |
 
@@ -40,7 +41,10 @@ root / file / database / sharedpref / external をすべて除外。
 | `securityLevel` | KeySecurityLevel | 鍵生成時の Keystore セキュリティレベル |
 
 - non-discoverable credential も鍵は端末内に保存する (credential ID に鍵をラップしない。Keystore の鍵は外部に出せないため)。
-- 同一 RP・同一ユーザー ID の discoverable credential は 1 件のみ (再登録で置き換え)。
+- 同一 RP・同一ユーザー ID の discoverable credential は 1 件のみ (再登録で置き換え。旧 credential は新しい登録の完成後に削除する)。
+- 等価性 (`equals`) は全フィールドの内容で判定する (署名カウンタ・最終使用日時の更新が StateFlow で UI に通知されるようにするため)。
+  同じ credential かどうかは `isSameCredential` (ID の比較) で判定する。
+- discoverable credential の順序は作成日時の新しい順 (`NEWEST_FIRST`、同時刻は ID 順)。最終使用日時は順序に影響しない。
 
 ## 3. 暗号化メタデータファイル
 
@@ -84,6 +88,16 @@ root / file / database / sharedpref / external をすべて除外。
 アプリ起動後の初回アクセス時 (`KeystoreCredentialStore.load()`) に、Keystore に鍵エイリアスが存在しないメタデータを除去し、
 除去があればファイルを書き直す。
 
+| 状態 | 扱い |
+|---|---|
+| ファイルがない | 空のストアとして扱う |
+| ファイルがあるが読めない (12 バイト以下、GCM タグ不一致、暗号鍵がない、JSON 不正) | **空として扱わない**。ストアを UNAVAILABLE にし、上書きを伴う操作を拒否する (DD-07 §5) |
+
+- AES-GCM により暗号文の改ざん・破損は検出する。ただし、以前に保存した**正当なファイルへの巻き戻し** (署名カウンタを古い値へ戻す等)
+  は検出しない。同じファイル内に世代番号を持たせても、ファイル全体を戻されれば検出できないため、本アプリでは対策しない
+  (アプリ専用領域のファイルを書き換えられる攻撃者を想定外とする。BD-05 T-04)。
+- 更新は新しいスナップショットを作って保存し、保存に成功してからキャッシュ・UI へ反映する (保存失敗時にメモリとファイルが食い違わない)。
+
 ## 4. 設定 (SharedPreferences `settings`)
 
 | キー | 型 | 既定値 | 値の範囲 | 内容 |
@@ -119,7 +133,7 @@ root / file / database / sharedpref / external をすべて除外。
 | `source` | `NFC` / `Bluetooth` / `Session` / `Keystore` |
 | `message` | 内容 (DD-09 §3) |
 
-最大 300 件 (新しい順)。同じ内容を logcat (タグ `TCAndroidKey`) にも出力する。
+最大 300 件 (新しい順)。logcat (タグ `TCAndroidKey`) にも出力するが、logcat には RP ID・ユーザー名を含めない (DD-09 §3.3)。
 
 ## 7. 定数
 

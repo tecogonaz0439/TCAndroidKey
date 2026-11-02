@@ -26,6 +26,9 @@
    adb logcat -s TCAndroidKey
    ```
 
+   logcat にはコマンド名と結果 (例 `authenticatorMakeCredential → CTAP2_OK`) のみを出力する。
+   RP ID・ユーザー名はアプリの「ログ」画面で確認する。
+
 > 注意: **アプリをアンインストールすると、登録した鍵はすべて削除される**。更新は上書きインストールで行う。
 
 ## 2. Windows 11 + RC-S300/P
@@ -106,3 +109,21 @@
 | 11 | StrongBox 搭載端末 | クレデンシャルに「StrongBox」と表示される |
 | 12 | 画面ロックを解除 (無効化) | 鍵が使えなくなる / 新規登録不可の表示になる |
 | 13 | PC からのリセット (設定 OFF / ON) | OFF: 拒否、ON: 全削除 |
+| 14 | 処理中に端末を離してすぐ載せ直す (繰り返す) | 異常終了しない。古い応答が出ない (DD-10 IT-24) |
+| 15 | 本人確認後に「停止」してからかざす | 認証されない |
+| 16 | Bluetooth ON で起動 → ホームへ → 数分後に戻る | 「PC からの接続待ち」に戻る (DD-10 IT-27) |
+| 17 | TalkBack を有効にして受付中に操作 | 残り秒数が毎秒読み上げられない |
+
+## 7. 実機なしでの応答形式の確認 (python-fido2)
+
+fido-core が生成した応答を python-fido2 (2.0.0) で解析・検証する (DD-10 CT-05)。
+
+```bash
+TCAK_INTEROP_OUT=/tmp/tcak-vectors.json ./gradlew :fido-core:test --tests '*InteropVectorExport*' --rerun
+```
+
+```bash
+python3 scripts/test/verify_interop_vectors.py /tmp/tcak-vectors.json
+```
+
+GetInfo の内容、packed 自己アテステーション (`type=SELF`) とアサーションの署名検証結果が表示され、最後に `OK` となる。

@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCAK-BD-03 |
-| 版数 | 1.0 |
+| 版数 | 1.1 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.1 (2026-11-02): 外部レビュー対応 (認可判定を `fido.session.AuthorizationGate` に集約)。`review/FIX_PLAN.md` |
 | 関連文書 | DD-04 モジュール・クラス設計、DD-05 状態遷移 |
 
 ## 1. 設計方針
@@ -54,6 +55,7 @@ flowchart TB
 | | `fido.ctap2` | CTAP2 コマンド処理、`CredentialStore` / `AuthorizationPolicy` インターフェース、定数 |
 | | `fido.nfc` | ISO 7816-4 APDU (SELECT / NFCCTAP_MSG / チェイニング) |
 | | `fido.hid` | CTAPHID フレーミング |
+| | `fido.session` | 全トランスポート共有の認可ゲート (`AuthorizationGate`: 前面・受付・ワンタイム予約・失効) |
 | `:app` | `keystore` | Android Keystore による鍵生成・署名・削除、暗号化メタデータ |
 | | `auth` | 認証受付セッション、BiometricPrompt |
 | | `nfc` | `HostApduService` 実装 |
@@ -66,7 +68,7 @@ flowchart TB
 ```mermaid
 flowchart LR
     P["プレゼンテーション<br/>MainActivity / Compose / MainViewModel"] --> S["アプリケーションサービス<br/>AuthSessionManager / BluetoothHidAuthenticator"]
-    T["トランスポート<br/>FidoHostApduService / NfcCtapProcessor / CtapHidProcessor"] --> D["ドメイン (プロトコル)<br/>Ctap2Authenticator"]
+    T["トランスポート<br/>FidoHostApduService / NfcCtapProcessor / CtapHidProcessor"] --> D["ドメイン (プロトコル)<br/>Ctap2Authenticator / AuthorizationGate"]
     S --> D
     D --> I["インフラ<br/>KeystoreCredentialStore / MetadataStore / SettingsRepository"]
 ```

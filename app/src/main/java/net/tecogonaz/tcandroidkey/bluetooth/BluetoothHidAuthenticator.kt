@@ -189,7 +189,7 @@ class BluetoothHidAuthenticator(private val container: AppContainer) {
                     host = device
                     val name = runCatching { device?.name }.getOrNull() ?: device?.address
                     _state.value = State(Status.CONNECTED, hostName = name)
-                    log(LogLevel.INFO, "host connected: $name")
+                    log(LogLevel.INFO, "host connected: $name", logcatMessage = "host connected")
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     if (host == null || host == device) host = null
@@ -242,7 +242,8 @@ class BluetoothHidAuthenticator(private val container: AppContainer) {
         }
     }
 
-    private fun log(level: LogLevel, message: String) = container.eventLog.log(level, TRANSPORT, message)
+    private fun log(level: LogLevel, message: String, logcatMessage: String = message) =
+        container.eventLog.log(level, TRANSPORT, message, logcatMessage)
 
     companion object {
         const val TRANSPORT: String = "Bluetooth"
