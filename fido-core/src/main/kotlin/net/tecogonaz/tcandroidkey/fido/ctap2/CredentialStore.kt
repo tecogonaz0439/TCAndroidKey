@@ -44,7 +44,20 @@ data class StoredCredential(
 ) {
     val idHex: String get() = Hex.encode(id)
 
-    override fun equals(other: Any?): Boolean = other is StoredCredential && id.contentEquals(other.id)
+    /** 同じ credential (ID が同じ) か。内容 (署名カウンタ等) の違いは問わない。 */
+    fun isSameCredential(other: StoredCredential): Boolean = id.contentEquals(other.id)
+
+    /**
+     * 全フィールドの内容で比較する。署名カウンタ・最終使用日時の更新も「変更」として扱われ、
+     * StateFlow による UI への通知が抑止されないようにする (同一性の判定には [isSameCredential] を使う)。
+     */
+    override fun equals(other: Any?): Boolean = other is StoredCredential &&
+        id.contentEquals(other.id) && rpId == other.rpId && rpName == other.rpName && user == other.user &&
+        discoverable == other.discoverable && createdAtMillis == other.createdAtMillis &&
+        lastUsedAtMillis == other.lastUsedAtMillis && signCount == other.signCount &&
+        publicKeyX.contentEquals(other.publicKeyX) && publicKeyY.contentEquals(other.publicKeyY) &&
+        securityLevel == other.securityLevel
+
     override fun hashCode(): Int = id.contentHashCode()
 
     companion object {
@@ -73,8 +86,6 @@ interface CredentialStore {
     /** 指定 RP の discoverable credential を作成日時の新しい順 ([StoredCredential.NEWEST_FIRST]) に返す。 */
     fun findDiscoverable(rpId: String): List<StoredCredential>
 
-    /** 同一 RP・同一ユーザー ID の既存 discoverable credential を削除する (上書き登録)。 */
-    fun deleteDiscoverable(rpId: String, userId: ByteArray)
 
     /** クレデンシャルの秘密鍵で [data] に署名し、DER 形式の ECDSA 署名を返す。 */
     fun sign(credential: StoredCredential, data: ByteArray): ByteArray

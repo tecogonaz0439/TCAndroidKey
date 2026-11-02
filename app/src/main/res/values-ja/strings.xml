@@ -81,6 +81,10 @@
     <string name="dialog_delete_message">%1$s (%2$s) の鍵を完全に削除します。</string>
     <string name="dialog_delete_all_title">すべてのクレデンシャルを削除しますか?</string>
     <string name="dialog_delete_all_message">このアプリが保管している %1$d 件の鍵をすべて完全に削除します。</string>
+    <string name="credentials_unavailable_title">保存済みのクレデンシャルを読み込めません</string>
+    <string name="credentials_unavailable_message">クレデンシャルのメタデータを読み込めませんでした。既存のデータを上書きしないよう、登録と認証を停止しています。初期化すると、すべての鍵を削除して最初からやり直します。</string>
+    <string name="action_initialize_storage">初期化 (すべて削除)</string>
+    <string name="dialog_initialize_storage_message">読み込めなかったものを含め、このアプリが保管している鍵とメタデータをすべて完全に削除します。</string>
 
     <!-- 本人確認 -->
     <string name="verify_title_arm">セキュリティキーを使うために本人確認</string>

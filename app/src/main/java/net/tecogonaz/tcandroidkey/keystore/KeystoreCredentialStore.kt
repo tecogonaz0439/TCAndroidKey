@@ -46,37 +46,81 @@ class KeystoreCredentialStore(
     context: Context,
     private val preferStrongBox: () -> Boolean
 ) : CredentialStore {
+    /** メタデータの読み込み状態。 */
+    enum class Availability { NOT_LOADED, AVAILABLE, UNAVAILABLE }
+
+    data class StorageStatus(val availability: Availability, val error: String? = null)
+
     private val appContext = context.applicationContext
     private val metadata = MetadataStore(appContext.filesDir)
     private val random = SecureRandom()
-    private val cache = LinkedHashMap<String, StoredCredential>()
+
+    /** 保存済みの内容と一致するスナップショット。保存に成功してから差し替える (書き換えない)。 */
+    private var cache: Map<String, StoredCredential> = emptyMap()
     private var loaded = false
 
     private val _credentials = MutableStateFlow<List<StoredCredential>>(emptyList())
 
-    /** UI 表示用のクレデンシャル一覧 (新しい順)。 */
+    /** UI 表示用のクレデンシャル一覧 (作成日時の新しい順)。 */
     val credentials: StateFlow<List<StoredCredential>> = _credentials.asStateFlow()
+
+    private val _status = MutableStateFlow(StorageStatus(Availability.NOT_LOADED))
+
+    /**
+     * メタデータの状態。[Availability.UNAVAILABLE] の間は、既存のファイルを上書きしないよう
+     * 登録・認証・個別削除を拒否する (全削除による初期化のみ可能)。
+     */
+    val status: StateFlow<StorageStatus> = _status.asStateFlow()
 
     val isStrongBoxAvailable: Boolean
         get() = appContext.packageManager.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
 
     private fun keyStore(): KeyStore = KeyStore.getInstance(MetadataStore.ANDROID_KEYSTORE).apply { load(null) }
 
-    /** メタデータを読み込み、Keystore に鍵が存在しないエントリを除去する。 */
+    /**
+     * メタデータを読み込み、Keystore に鍵が存在しないエントリを除去する。
+     * 読み込めない場合は [status] を UNAVAILABLE にして例外を投げる (次の操作時に再試行する)。
+     */
     @Synchronized
     fun load() {
+        ensureLoaded()
+    }
+
+    private fun ensureLoaded() {
         if (loaded) return
-        val ks = keyStore()
-        val entries = runCatching { metadata.load() }.getOrElse { emptyList() }
-        cache.clear()
-        entries.filter { ks.containsAlias(alias(it.id)) }.forEach { cache[it.idHex] = it }
-        loaded = true
-        if (cache.size != entries.size) persist() else publish()
+        try {
+            val ks = keyStore()
+            val entries = metadata.load()
+            val next = LinkedHashMap<String, StoredCredential>()
+            entries.filter { ks.containsAlias(alias(it.id)) }.forEach { next[it.idHex] = it }
+            if (next.size != entries.size) metadata.save(next.values)
+            commit(next)
+            loaded = true
+            _status.value = StorageStatus(Availability.AVAILABLE)
+        } catch (e: Exception) {
+            _status.value = StorageStatus(Availability.UNAVAILABLE, e.message ?: e.javaClass.simpleName)
+            throw CtapException(CtapStatus.ERR_OTHER, "credential storage unavailable: ${e.message}")
+        }
+    }
+
+    /** [next] を保存し、成功した場合のみキャッシュ・UI へ反映する。 */
+    private fun saveAndCommit(next: Map<String, StoredCredential>) {
+        try {
+            metadata.save(next.values)
+        } catch (e: Exception) {
+            throw CtapException(CtapStatus.ERR_OTHER, "failed to save credential metadata: ${e.message}")
+        }
+        commit(next)
+    }
+
+    private fun commit(next: Map<String, StoredCredential>) {
+        cache = next
+        _credentials.value = next.values.sortedWith(StoredCredential.NEWEST_FIRST)
     }
 
     @Synchronized
     override fun create(rpId: String, rpName: String?, user: UserEntity, discoverable: Boolean): StoredCredential {
-        load()
+        ensureLoaded()
         val id = ByteArray(CREDENTIAL_ID_LENGTH).also { random.nextBytes(it) }
         val alias = alias(id)
         val useStrongBox = preferStrongBox() && isStrongBoxAvailable
@@ -104,8 +148,12 @@ class KeystoreCredentialStore(
             publicKeyY = y,
             securityLevel = securityLevelOf(keyPair.private)
         )
-        cache[credential.idHex] = credential
-        persist()
+        try {
+            saveAndCommit(LinkedHashMap(cache).apply { put(credential.idHex, credential) })
+        } catch (e: Exception) {
+            runCatching { keyStore().deleteEntry(alias) } // メタデータのない鍵を残さない
+            throw e
+        }
         return credential
     }
 
@@ -139,24 +187,14 @@ class KeystoreCredentialStore(
 
     @Synchronized
     override fun findByIds(rpId: String, ids: List<ByteArray>): List<StoredCredential> {
-        load()
-        return ids.mapNotNull { cache[Hex.encode(it)] }.filter { it.rpId == rpId }.distinct()
+        ensureLoaded()
+        return ids.mapNotNull { cache[Hex.encode(it)] }.filter { it.rpId == rpId }.distinctBy { it.idHex }
     }
 
     @Synchronized
     override fun findDiscoverable(rpId: String): List<StoredCredential> {
-        load()
-        return cache.values.filter { it.rpId == rpId && it.discoverable }
-            .sortedWith(StoredCredential.NEWEST_FIRST)
-    }
-
-    @Synchronized
-    override fun deleteDiscoverable(rpId: String, userId: ByteArray) {
-        load()
-        cache.values.filter { it.rpId == rpId && it.discoverable && it.user.id.contentEquals(userId) }
-            .toList()
-            .forEach { deleteInternal(it.id) }
-        persist()
+        ensureLoaded()
+        return cache.values.filter { it.rpId == rpId && it.discoverable }.sortedWith(StoredCredential.NEWEST_FIRST)
     }
 
     override fun sign(credential: StoredCredential, data: ByteArray): ByteArray {
@@ -183,53 +221,47 @@ class KeystoreCredentialStore(
 
     @Synchronized
     override fun incrementSignCount(credential: StoredCredential): Long {
-        load()
+        ensureLoaded()
         val current = cache[credential.idHex] ?: throw CtapException(CtapStatus.ERR_INVALID_CREDENTIAL)
         val updated = current.copy(signCount = current.signCount + 1, lastUsedAtMillis = System.currentTimeMillis())
-        cache[credential.idHex] = updated
-        persist()
+        // 署名前に永続化する (保存できなければ署名しない)
+        saveAndCommit(LinkedHashMap(cache).apply { put(updated.idHex, updated) })
         return updated.signCount
     }
 
     @Synchronized
     override fun list(): List<StoredCredential> {
-        load()
+        ensureLoaded()
         return cache.values.sortedWith(StoredCredential.NEWEST_FIRST)
     }
 
+    /** メタデータから外してから鍵を削除する (保存に失敗した場合は何も変えない)。 */
     @Synchronized
     override fun delete(id: ByteArray): Boolean {
-        load()
-        val removed = deleteInternal(id)
-        persist()
+        ensureLoaded()
+        val key = Hex.encode(id)
+        val removed = cache.containsKey(key)
+        if (removed) saveAndCommit(LinkedHashMap(cache).apply { remove(key) })
+        // 鍵の削除に失敗しても、メタデータのない鍵は全削除 (エイリアスの接頭辞で検索) で除去される
+        runCatching { keyStore().deleteEntry(alias(id)) }
         return removed
     }
 
-    private fun deleteInternal(id: ByteArray): Boolean {
-        runCatching { keyStore().deleteEntry(alias(id)) }
-        return cache.remove(Hex.encode(id)) != null
-    }
-
-    /** 全クレデンシャル (本アプリが生成した全鍵) を削除する。 */
+    /**
+     * 全クレデンシャル (本アプリが生成した全鍵) とメタデータを削除する。
+     * メタデータを読み込めない状態からの初期化にも使う (メタデータの暗号鍵も作り直す)。
+     */
     @Synchronized
     override fun deleteAll() {
         val ks = keyStore()
         ks.aliases().toList().filter { it.startsWith(ALIAS_PREFIX) }.forEach {
             runCatching { ks.deleteEntry(it) }
         }
-        cache.clear()
-        loaded = true
         metadata.deleteFile()
-        publish()
-    }
-
-    private fun persist() {
-        metadata.save(cache.values)
-        publish()
-    }
-
-    private fun publish() {
-        _credentials.value = cache.values.sortedWith(StoredCredential.NEWEST_FIRST)
+        metadata.deleteKey()
+        commit(emptyMap())
+        loaded = true
+        _status.value = StorageStatus(Availability.AVAILABLE)
     }
 
     private fun alias(id: ByteArray): String = ALIAS_PREFIX + Hex.encode(id)

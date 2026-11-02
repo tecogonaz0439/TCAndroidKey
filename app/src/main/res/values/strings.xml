@@ -83,6 +83,10 @@
     <string name="dialog_delete_message">The key for %1$s (%2$s) will be permanently deleted.</string>
     <string name="dialog_delete_all_title">Delete all credentials?</string>
     <string name="dialog_delete_all_message">All %1$d key(s) stored by this app will be permanently deleted.</string>
+    <string name="credentials_unavailable_title">Saved credentials cannot be read</string>
+    <string name="credentials_unavailable_message">The credential metadata could not be read. Registration and authentication are stopped so that the existing data is not overwritten. Initialize to delete all keys and start over.</string>
+    <string name="action_initialize_storage">Initialize (delete all)</string>
+    <string name="dialog_initialize_storage_message">All keys and metadata stored by this app will be permanently deleted, including credentials that could not be read.</string>
 
     <!-- Verification -->
     <string name="verify_title_arm">Verify to use the security key</string>

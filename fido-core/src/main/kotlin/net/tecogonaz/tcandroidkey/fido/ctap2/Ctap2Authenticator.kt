@@ -197,7 +197,8 @@ class Ctap2Authenticator(
         var created: StoredCredential? = null
         try {
             ensureActive(grant.lease, keepAlive)
-            if (rk) store.deleteDiscoverable(rpId, user.id)
+            // 上書き登録 (同一 RP・同一 user.id の discoverable) でも、旧 credential は新しい登録が
+            // 完成してから削除する (新規作成の失敗で既存の鍵を失わない)。
             val credential = store.create(rpId, rpName, user, rk).also { created = it }
             val flags = AuthDataFlags.UP or AuthDataFlags.AT or (if (grant.userVerified) AuthDataFlags.UV else 0)
             val authData = buildAuthData(rpIdHash(rpId), flags, credential.signCount) {
@@ -221,6 +222,7 @@ class Ctap2Authenticator(
             }
             // 応答を返す直前にも確認する (停止後に登録結果を送出しない)。
             ensureActive(grant.lease, keepAlive)
+            if (rk) replaceOlderDiscoverable(credential)
             success = true
             return linkedMapOf(1L to fmt, 2L to authData, 3L to attStmt)
         } finally {
@@ -385,6 +387,19 @@ class Ctap2Authenticator(
             is AuthorizationResult.Granted -> r
             is AuthorizationResult.Denied -> throw CtapException(r.status, r.reason)
         }
+
+    /**
+     * [newCredential] と同じ RP・user.id で、それ以前に作成された discoverable credential を削除する。
+     * 削除に失敗しても新しい登録は有効なまま (旧 credential が残るだけ) とする。
+     */
+    private fun replaceOlderDiscoverable(newCredential: StoredCredential) {
+        store.findDiscoverable(newCredential.rpId)
+            .filter {
+                it.user.id.contentEquals(newCredential.user.id) && !it.id.contentEquals(newCredential.id) &&
+                    it.createdAtMillis <= newCredential.createdAtMillis
+            }
+            .forEach { old -> runCatching { store.delete(old.id) } }
+    }
 
     /** 鍵操作・応答の直前に、操作が取り消されていないこと・認可が失効していないことを確認する。 */
     private fun ensureActive(lease: AuthorizationLease, keepAlive: KeepAlive) {

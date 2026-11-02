@@ -59,6 +59,14 @@ class BluetoothHidAuthenticator(private val container: AppContainer) {
     @Volatile
     private var host: BluetoothDevice? = null
 
+    /** HID アプリとして登録済みか (プロキシの有無とは別。OS がバックグラウンド化等で解除することがある)。 */
+    @Volatile
+    private var registered = false
+
+    /** 利用者が開始を指示しているか。停止後に遅れて届いたプロキシ接続で登録しないために使う。 */
+    @Volatile
+    private var desiredStarted = false
+
     fun hasPermission(): Boolean =
         context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
 
@@ -73,7 +81,12 @@ class BluetoothHidAuthenticator(private val container: AppContainer) {
             _state.value = State(Status.BLUETOOTH_OFF)
             return
         }
-        if (hid != null) return
+        desiredStarted = true
+        hid?.let { proxy ->
+            // プロキシは残っているが登録が解除されている場合は、登録し直す
+            if (!registered) register(proxy)
+            return
+        }
         _state.value = State(Status.STARTING)
         val requested = try {
             a.getProfileProxy(context, serviceListener, BluetoothProfile.HID_DEVICE)
@@ -90,6 +103,8 @@ class BluetoothHidAuthenticator(private val container: AppContainer) {
      * (本人確認待ちの操作は取消トークンで中断され、CTAP の状態はロックを待たずに破棄する)。
      */
     fun stop() {
+        desiredStarted = false
+        registered = false
         processor.reset()
         authenticator.resetSession()
         val h = hid ?: run {
@@ -112,42 +127,59 @@ class BluetoothHidAuthenticator(private val container: AppContainer) {
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile?) {
             if (profile != BluetoothProfile.HID_DEVICE || proxy == null) return
             val device = proxy as BluetoothHidDevice
+            if (!desiredStarted) {
+                // 開始要求の後、接続前に停止された
+                runCatching { adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, device) }
+                return
+            }
             hid = device
-            val sdp = BluetoothHidDeviceAppSdpSettings(
-                SDP_NAME,
-                SDP_DESCRIPTION,
-                SDP_PROVIDER,
-                BluetoothHidDevice.SUBCLASS1_NONE,
-                CtapHidProcessor.REPORT_DESCRIPTOR
-            )
-            val ok = try {
-                device.registerApp(sdp, null, null, callbackExecutor, hidCallback)
-            } catch (e: SecurityException) {
-                false
-            }
-            if (!ok) {
-                _state.value = State(Status.ERROR, message = "registerApp failed")
-                log(LogLevel.ERROR, "failed to register HID device")
-            }
+            register(device)
         }
 
         override fun onServiceDisconnected(profile: Int) {
             if (profile != BluetoothProfile.HID_DEVICE) return
             hid = null
             host = null
+            registered = false
             processor.reset()
             authenticator.resetSession()
             _state.value = State(Status.STOPPED)
         }
     }
 
+    private fun register(device: BluetoothHidDevice) {
+        val sdp = BluetoothHidDeviceAppSdpSettings(
+            SDP_NAME,
+            SDP_DESCRIPTION,
+            SDP_PROVIDER,
+            BluetoothHidDevice.SUBCLASS1_NONE,
+            CtapHidProcessor.REPORT_DESCRIPTOR
+        )
+        _state.value = State(Status.STARTING)
+        val ok = try {
+            device.registerApp(sdp, null, null, callbackExecutor, hidCallback)
+        } catch (e: SecurityException) {
+            false
+        }
+        if (!ok) {
+            _state.value = State(Status.ERROR, message = "registerApp failed")
+            log(LogLevel.ERROR, "failed to register HID device")
+        }
+    }
+
     private val hidCallback = object : BluetoothHidDevice.Callback() {
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, registered: Boolean) {
+            this@BluetoothHidAuthenticator.registered = registered
             if (registered) {
                 _state.value = State(Status.WAITING_FOR_HOST)
                 log(LogLevel.INFO, "registered as FIDO HID device; waiting for host")
             } else if (hid != null) {
+                // OS による自動解除 (アプリのバックグラウンド化など)。次の start() で登録し直す。
+                processor.reset()
+                authenticator.resetSession()
+                host = null
                 _state.value = State(Status.STOPPED)
+                log(LogLevel.INFO, "HID device registration ended; it will be registered again when the app returns")
             }
         }
 

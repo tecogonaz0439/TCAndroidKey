@@ -53,11 +53,6 @@ class InMemoryCredentialStore : CredentialStore {
     override fun findDiscoverable(rpId: String): List<StoredCredential> =
         creds.values.filter { it.rpId == rpId && it.discoverable }.sortedWith(StoredCredential.NEWEST_FIRST)
 
-    override fun deleteDiscoverable(rpId: String, userId: ByteArray) {
-        creds.values.filter { it.rpId == rpId && it.discoverable && it.user.id.contentEquals(userId) }
-            .forEach { delete(it.id) }
-    }
-
     override fun sign(credential: StoredCredential, data: ByteArray): ByteArray {
         val s = Signature.getInstance("SHA256withECDSA")
         s.initSign(keys.getValue(credential.idHex))

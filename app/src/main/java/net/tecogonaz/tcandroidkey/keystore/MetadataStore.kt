@@ -13,6 +13,8 @@ import net.tecogonaz.tcandroidkey.fido.ctap2.UserEntity
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileNotFoundException
+import java.io.IOException
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -24,6 +26,10 @@ import javax.crypto.spec.GCMParameterSpec
  *
  * 暗号鍵は Android Keystore の AES-256-GCM 鍵 (ユーザー認証不要・端末外へ取り出し不可)。
  * 秘密鍵そのものは Keystore 内にあり、このファイルには含まれない。
+ *
+ * AES-GCM により暗号文の改ざん・破損は検出するが、以前に保存した正当なファイルへの巻き戻しは検出しない。
+ * ファイルがない場合は空として扱い、ファイルがあるのに読めない場合は [IOException] を投げる
+ * (呼び出し側は空のストアとして上書きしてはならない)。
  */
 internal class MetadataStore(directory: File) {
     private val file = AtomicFile(File(directory, FILE_NAME))
@@ -31,16 +37,22 @@ internal class MetadataStore(directory: File) {
     fun load(): List<StoredCredential> {
         val bytes = try {
             file.readFully()
-        } catch (e: java.io.FileNotFoundException) {
+        } catch (e: FileNotFoundException) {
             return emptyList()
         }
-        if (bytes.size <= IV_LENGTH) return emptyList()
-        val iv = bytes.copyOfRange(0, IV_LENGTH)
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, iv))
-        val json = String(cipher.doFinal(bytes, IV_LENGTH, bytes.size - IV_LENGTH), Charsets.UTF_8)
-        val array = JSONArray(json)
-        return (0 until array.length()).map { fromJson(array.getJSONObject(it)) }
+        if (bytes.size <= IV_LENGTH) throw IOException("metadata file is truncated (${bytes.size} bytes)")
+        return try {
+            val iv = bytes.copyOfRange(0, IV_LENGTH)
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.DECRYPT_MODE, existingKey() ?: throw IOException("metadata key is missing"), GCMParameterSpec(128, iv))
+            val json = String(cipher.doFinal(bytes, IV_LENGTH, bytes.size - IV_LENGTH), Charsets.UTF_8)
+            val array = JSONArray(json)
+            (0 until array.length()).map { fromJson(array.getJSONObject(it)) }
+        } catch (e: IOException) {
+            throw e
+        } catch (e: Exception) {
+            throw IOException("metadata file cannot be read: ${e.javaClass.simpleName}", e)
+        }
     }
 
     fun save(credentials: Collection<StoredCredential>) {
@@ -66,9 +78,18 @@ internal class MetadataStore(directory: File) {
         file.delete()
     }
 
-    private fun key(): SecretKey {
+    /** メタデータの暗号鍵を削除する (初期化用。次回の保存で新しい鍵を生成する)。 */
+    fun deleteKey() {
+        runCatching { KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }.deleteEntry(KEY_ALIAS) }
+    }
+
+    private fun existingKey(): SecretKey? {
         val ks = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-        (ks.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+        return ks.getKey(KEY_ALIAS, null) as? SecretKey
+    }
+
+    private fun key(): SecretKey {
+        existingKey()?.let { return it }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
         generator.init(
             KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)

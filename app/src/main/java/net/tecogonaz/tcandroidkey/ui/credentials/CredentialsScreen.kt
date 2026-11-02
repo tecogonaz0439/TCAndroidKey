@@ -25,6 +25,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +47,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.tecogonaz.tcandroidkey.R
 import net.tecogonaz.tcandroidkey.fido.ctap2.KeySecurityLevel
 import net.tecogonaz.tcandroidkey.fido.ctap2.StoredCredential
+import net.tecogonaz.tcandroidkey.keystore.KeystoreCredentialStore
 import net.tecogonaz.tcandroidkey.ui.MainViewModel
 import net.tecogonaz.tcandroidkey.ui.UiActions
 import net.tecogonaz.tcandroidkey.ui.common.SettingsHelpText
@@ -56,6 +58,8 @@ import net.tecogonaz.tcandroidkey.ui.common.mouseDragScroll
 @Composable
 fun CredentialsScreen(viewModel: MainViewModel, actions: UiActions) {
     val credentials by viewModel.credentials.collectAsStateWithLifecycle()
+    val storage by viewModel.storageStatus.collectAsStateWithLifecycle()
+    val unavailable = storage.availability == KeystoreCredentialStore.Availability.UNAVAILABLE
     var deleteTarget by remember { mutableStateOf<StoredCredential?>(null) }
     var confirmDeleteAll by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
@@ -76,6 +80,9 @@ fun CredentialsScreen(viewModel: MainViewModel, actions: UiActions) {
             item {
                 Column(modifier = Modifier.padding(top = 16.dp)) {
                     SettingsHelpText(stringResource(R.string.credentials_help))
+                    if (unavailable) {
+                        StorageUnavailableCard(error = storage.error, onInitialize = { confirmDeleteAll = true })
+                    }
                     if (credentials.isNotEmpty()) {
                         OutlinedButton(
                             onClick = { confirmDeleteAll = true },
@@ -88,7 +95,7 @@ fun CredentialsScreen(viewModel: MainViewModel, actions: UiActions) {
                     }
                 }
             }
-            if (credentials.isEmpty()) {
+            if (credentials.isEmpty() && !unavailable) {
                 item {
                     Text(
                         text = stringResource(R.string.credentials_empty),
@@ -135,7 +142,12 @@ fun CredentialsScreen(viewModel: MainViewModel, actions: UiActions) {
             onDismissRequest = { confirmDeleteAll = false },
             icon = { Icon(Icons.Outlined.DeleteForever, contentDescription = null) },
             title = { Text(stringResource(R.string.dialog_delete_all_title)) },
-            text = { Text(stringResource(R.string.dialog_delete_all_message, credentials.size)) },
+            text = {
+                Text(
+                    if (unavailable) stringResource(R.string.dialog_initialize_storage_message)
+                    else stringResource(R.string.dialog_delete_all_message, credentials.size)
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDeleteAll = false
@@ -146,6 +158,41 @@ fun CredentialsScreen(viewModel: MainViewModel, actions: UiActions) {
                 TextButton(onClick = { confirmDeleteAll = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
+    }
+}
+
+/** メタデータを読み込めない場合の案内と初期化ボタン。 */
+@Composable
+private fun StorageUnavailableCard(error: String?, onInitialize: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = stringResource(R.string.credentials_unavailable_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Text(
+                text = stringResource(R.string.credentials_unavailable_message),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            error?.let {
+                Text(text = it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+            }
+            OutlinedButton(
+                onClick = onInitialize,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+            ) {
+                Icon(Icons.Outlined.DeleteForever, contentDescription = null)
+                Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
+                Text(stringResource(R.string.action_initialize_storage))
+            }
+        }
     }
 }
 

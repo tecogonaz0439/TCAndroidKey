@@ -25,11 +25,13 @@ import net.tecogonaz.tcandroidkey.data.LogLevel
 import net.tecogonaz.tcandroidkey.domain.AppSettings
 import net.tecogonaz.tcandroidkey.domain.DeviceCapabilities
 import net.tecogonaz.tcandroidkey.fido.ctap2.StoredCredential
+import net.tecogonaz.tcandroidkey.keystore.KeystoreCredentialStore
 
 class MainViewModel(private val container: AppContainer) : ViewModel() {
     val settings: StateFlow<AppSettings> = container.settings.settings
     val session: StateFlow<AuthSessionState> = container.session.state
     val credentials: StateFlow<List<StoredCredential>> = container.credentialStore.credentials
+    val storageStatus: StateFlow<KeystoreCredentialStore.StorageStatus> = container.credentialStore.status
     val events: StateFlow<List<LogEntry>> = container.eventLog.entries
     val bluetooth: StateFlow<BluetoothHidAuthenticator.State> = container.bluetooth.state
 
@@ -65,15 +67,18 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
 
     fun deleteCredential(credential: StoredCredential) {
         viewModelScope.launch(Dispatchers.IO) {
-            container.credentialStore.delete(credential.id)
-            container.eventLog.log(LogLevel.INFO, "Keystore", "deleted credential for ${credential.rpId}")
+            runCatching { container.credentialStore.delete(credential.id) }
+                .onSuccess { container.eventLog.log(LogLevel.INFO, "Keystore", "deleted credential for ${credential.rpId}") }
+                .onFailure { container.eventLog.log(LogLevel.ERROR, "Keystore", "failed to delete credential: ${it.message}") }
         }
     }
 
+    /** 全削除。メタデータを読み込めない状態からの初期化にも使う。 */
     fun deleteAllCredentials() {
         viewModelScope.launch(Dispatchers.IO) {
-            container.credentialStore.deleteAll()
-            container.eventLog.log(LogLevel.INFO, "Keystore", "deleted all credentials")
+            runCatching { container.credentialStore.deleteAll() }
+                .onSuccess { container.eventLog.log(LogLevel.INFO, "Keystore", "deleted all credentials") }
+                .onFailure { container.eventLog.log(LogLevel.ERROR, "Keystore", "failed to delete credentials: ${it.message}") }
         }
     }
 
