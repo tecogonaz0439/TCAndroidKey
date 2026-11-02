@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">TCAndroidKey</string>
+
+    <!-- Navigation -->
+    <string name="nav_authenticator">Security key</string>
+    <string name="nav_credentials">Credentials</string>
+    <string name="nav_event_log">Event log</string>
+    <string name="nav_settings">Settings</string>
+    <string name="nav_about">About</string>
+    <string name="desc_open_menu">Open menu</string>
+    <string name="desc_expand_sidebar">Show sidebar</string>
+    <string name="desc_collapse_sidebar">Hide sidebar</string>
+    <string name="drawer_status_armed">Accepting authentication</string>
+    <string name="drawer_status_idle">Not accepting authentication</string>
+
+    <!-- Status -->
+    <string name="status_armed_title">Ready to authenticate</string>
+    <string name="status_idle_title">Verification required</string>
+    <string name="status_armed_remaining">%1$d s remaining</string>
+    <string name="status_armed_hint">Hold the back of this phone against the NFC reader, or use the paired Bluetooth connection.</string>
+    <string name="status_armed_hint_one_time">Hold the back of this phone against the NFC reader. Authorization ends after one registration or sign-in.</string>
+    <string name="status_idle_hint">Verify yourself with your fingerprint (or screen lock) before authenticating. Authentication works only while this screen is displayed.</string>
+    <string name="status_no_lock_screen">A screen lock (PIN, pattern or password) is required to protect the keys stored in the Android Keystore.</string>
+    <string name="status_last_auth">Last used: %1$s (%2$s)</string>
+    <string name="action_verify_and_start">Verify and start</string>
+    <string name="action_stop">Stop</string>
+    <string name="action_start">Start</string>
+    <string name="action_settings">Settings</string>
+    <string name="action_open_security_settings">Set up screen lock</string>
+
+    <!-- Transports -->
+    <string name="section_transports">Connections</string>
+    <string name="transport_nfc">NFC</string>
+    <string name="transport_nfc_ready">Ready (card emulation)</string>
+    <string name="transport_nfc_disabled">NFC is turned off</string>
+    <string name="transport_nfc_unsupported">This device does not support NFC card emulation</string>
+    <string name="action_open_nfc_settings">Turn on</string>
+    <string name="transport_bluetooth">Bluetooth HID (experimental)</string>
+    <string name="bt_status_unsupported">Not supported on this device</string>
+    <string name="bt_status_disabled_in_settings">Disabled in settings</string>
+    <string name="bt_status_permission">Permission required</string>
+    <string name="bt_status_off">Bluetooth is turned off</string>
+    <string name="bt_status_stopped">Stopped</string>
+    <string name="bt_status_starting">Starting…</string>
+    <string name="bt_status_waiting">Waiting for the computer to connect (pair from the computer)</string>
+    <string name="bt_status_connected">Connected: %1$s</string>
+    <string name="bt_status_error">Error: %1$s</string>
+    <string name="action_make_discoverable">Make this phone discoverable</string>
+    <string name="transport_usb">USB</string>
+    <string name="transport_usb_unsupported">Not supported (Android apps cannot act as a USB HID device without root)</string>
+
+    <!-- Key storage -->
+    <string name="section_key_storage">Key storage</string>
+    <string name="keystore_strongbox">Android Keystore (StrongBox available)</string>
+    <string name="keystore_tee">Android Keystore (TEE)</string>
+    <string name="keystore_credential_count">%1$d credential(s) stored</string>
+    <string name="action_manage_credentials">Manage</string>
+
+    <!-- Events -->
+    <string name="section_recent_events">Recent events</string>
+    <string name="action_show_all">Show all</string>
+    <string name="log_empty">No events yet</string>
+    <string name="log_help">Events are kept in memory only and are cleared when the app process ends.</string>
+    <string name="action_clear">Clear</string>
+
+    <!-- Credentials -->
+    <string name="credentials_help">Keys are generated inside the Android Keystore and never leave this device. Deleting a key cannot be undone; you will no longer be able to sign in to that service with it.</string>
+    <string name="credentials_empty">No credentials registered</string>
+    <string name="credential_created">Created: %1$s</string>
+    <string name="credential_last_used">Last used: %1$s (signatures: %2$d)</string>
+    <string name="credential_never_used">Not used yet</string>
+    <string name="credential_discoverable">Passkey (discoverable)</string>
+    <string name="credential_non_discoverable">Non-discoverable</string>
+    <string name="security_level_strongbox">StrongBox</string>
+    <string name="security_level_tee">TEE</string>
+    <string name="security_level_software">Software</string>
+    <string name="security_level_unknown">Unknown</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_delete_all">Delete all</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="dialog_delete_title">Delete credential?</string>
+    <string name="dialog_delete_message">The key for %1$s (%2$s) will be permanently deleted.</string>
+    <string name="dialog_delete_all_title">Delete all credentials?</string>
+    <string name="dialog_delete_all_message">All %1$d key(s) stored by this app will be permanently deleted.</string>
+
+    <!-- Verification -->
+    <string name="verify_title_arm">Verify to use the security key</string>
+    <string name="verify_title_delete">Verify to delete the credential</string>
+    <string name="verify_title_delete_all">Verify to delete all credentials</string>
+    <string name="verify_title_change_setting">Verify to change this setting</string>
+    <string name="verify_subtitle">TCAndroidKey</string>
+    <string name="msg_no_lock_screen">Set up a screen lock first.</string>
+    <string name="msg_no_strong_biometric">No strong (Class 3) biometric is enrolled.</string>
+    <string name="msg_verification_unavailable">User verification is not available on this device.</string>
+    <string name="msg_verification_failed">Verification failed: %1$s</string>
+    <string name="msg_bluetooth_permission_denied">Bluetooth permission was denied.</string>
+    <string name="msg_cannot_open">Cannot open the screen.</string>
+
+    <!-- Settings -->
+    <string name="settings_category_display">Display</string>
+    <string name="settings_system_theme">Theme</string>
+    <string name="desc_select_theme">Select theme</string>
+    <string name="theme_system">Follow system</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="settings_category_verification">User verification</string>
+    <string name="settings_auth_window">Authorization window</string>
+    <string name="settings_auth_window_help">How long authentication is accepted after you verify yourself.</string>
+    <string name="settings_seconds">%1$d seconds</string>
+    <string name="settings_one_time">One authentication per verification</string>
+    <string name="settings_one_time_help">End the authorization after one registration or sign-in.</string>
+    <string name="settings_biometric_only">Biometrics only</string>
+    <string name="settings_biometric_only_help">Do not allow PIN / pattern / password as the verification method.</string>
+    <string name="settings_prompt_on_tap">Prompt when tapped before verification</string>
+    <string name="settings_prompt_on_tap_help">Show the verification dialog automatically when a reader is detected. Tap the reader again after verifying.</string>
+    <string name="settings_category_keys">Keys</string>
+    <string name="settings_strongbox">Prefer StrongBox</string>
+    <string name="settings_strongbox_help">Generate new keys in the StrongBox secure element.</string>
+    <string name="settings_strongbox_unavailable">StrongBox is not available on this device; keys are generated in the TEE.</string>
+    <string name="settings_attestation">Attestation</string>
+    <string name="attestation_none">None (privacy)</string>
+    <string name="attestation_self">Self attestation (packed)</string>
+    <string name="settings_attestation_help">Attestation format returned when registering. Choose self attestation only if a service requires an attestation statement.</string>
+    <string name="settings_category_client">Client operations</string>
+    <string name="settings_allow_reset">Allow reset from the computer</string>
+    <string name="settings_allow_reset_help">Allow \"Reset security key\" from the OS to delete all credentials.</string>
+    <string name="settings_category_bluetooth">Bluetooth (experimental)</string>
+    <string name="settings_bluetooth">Use as a Bluetooth HID security key</string>
+    <string name="settings_bluetooth_help">Pair this phone with the computer; it appears as a FIDO HID device. Some operating systems or browsers may not support it.</string>
+
+    <!-- About -->
+    <string name="about_description">Turns this Android device into a FIDO2 (CTAP2) security key, like a hardware key, over NFC. No Google Play services required.</string>
+    <string name="about_version">Version</string>
+    <string name="about_aaguid">AAGUID</string>
+    <string name="about_protocols">Protocols</string>
+    <string name="about_protocols_value">CTAP 2.0 (FIDO_2_0) over NFC (ISO 7816-4 / HCE), CTAPHID over Bluetooth HID (experimental)</string>
+    <string name="about_algorithms">Algorithms</string>
+    <string name="about_security">Security</string>
+    <string name="about_security_text">Private keys are generated in the Android Keystore (StrongBox or TEE) and cannot be exported. Each key can be used only for a limited time after user verification, only while the device is unlocked, and only while this app is in the foreground.</string>
+    <string name="about_links">Links</string>
+    <string name="about_source">Source code</string>
+    <string name="about_license">License</string>
+    <string name="about_oss">Uses AndroidX / Jetpack Compose (Apache License 2.0).</string>
+
+    <!-- NFC service -->
+    <string name="hce_service_description">TCAndroidKey FIDO security key</string>
+    <string name="hce_aid_group_description">FIDO2 / CTAP2</string>
+</resources>
