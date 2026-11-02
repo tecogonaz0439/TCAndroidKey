@@ -157,10 +157,8 @@
     <string name="hce_aid_group_description">FIDO2 / CTAP2</string>
     <!-- Notice / Language -->
     <string name="notice_title">テスト専用です</string>
-    <string name="notice_summary">FIDO / FIDO2 を使用する Web アプリケーションのテスト用ツールです。YubiKey などの物理セキュリティキーの代替として使用せず、テスト用アカウントにのみ登録してください。</string>
     <string name="notice_body">TCAndroidKey は、FIDO / FIDO2 (WebAuthn) を使用する Web アプリケーションのテスト用ツールです。YubiKey などの物理セキュリティキーの代替として使用しないでください。\n\n・テスト用のアカウント・環境にのみ登録してください。本番サービスや重要なアカウントには登録しないでください。\n・FIDO 認定は受けておらず、専用のセキュリティキーと同等の安全性はありません。\n・アプリのアンインストールや端末の初期化で鍵は失われ、復旧できません。</string>
     <string name="notice_acknowledge">理解しました</string>
-    <string name="settings_category_notice">ご利用上の注意</string>
     <string name="settings_language">言語 (Language)</string>
     <string name="settings_language_system_default">システムのデフォルト (%1$s)</string>
     <string name="about_notice">ご利用上の注意</string>

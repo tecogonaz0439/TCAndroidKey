@@ -62,7 +62,6 @@ import net.tecogonaz.tcandroidkey.bluetooth.BluetoothHidAuthenticator.Status
 import net.tecogonaz.tcandroidkey.data.LogEntry
 import net.tecogonaz.tcandroidkey.ui.MainViewModel
 import net.tecogonaz.tcandroidkey.ui.UiActions
-import net.tecogonaz.tcandroidkey.ui.common.TestUseNoticeCard
 import net.tecogonaz.tcandroidkey.ui.common.formatDateTime
 import net.tecogonaz.tcandroidkey.ui.common.mouseDragScroll
 import net.tecogonaz.tcandroidkey.ui.log.LogEntryRow
@@ -105,7 +104,6 @@ fun AuthenticatorScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            TestUseNoticeCard(compact = true)
             StatusCard(
                 armed = armed,
                 remainingMs = remainingMs,

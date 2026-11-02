@@ -36,7 +36,6 @@ import net.tecogonaz.tcandroidkey.ui.common.SettingItemDropdown
 import net.tecogonaz.tcandroidkey.ui.common.SettingItemSwitch
 import net.tecogonaz.tcandroidkey.ui.common.SettingsCategoryTitle
 import net.tecogonaz.tcandroidkey.ui.common.SettingsHelpText
-import net.tecogonaz.tcandroidkey.ui.common.TestUseNoticeCard
 import net.tecogonaz.tcandroidkey.ui.common.ThemeSettingItem
 import net.tecogonaz.tcandroidkey.ui.common.mouseDragScroll
 
@@ -59,10 +58,6 @@ fun SettingsScreen(viewModel: MainViewModel, actions: UiActions) {
                 .verticalScroll(scrollState)
                 .padding(16.dp)
         ) {
-            SettingsCategoryTitle(stringResource(R.string.settings_category_notice))
-            TestUseNoticeCard(modifier = Modifier.padding(bottom = 8.dp))
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
             SettingsCategoryTitle(stringResource(R.string.settings_category_display))
             // 言語 (TCSameuraDamMonitor と同じく OS のアプリ別言語設定を開く)
             val effectiveLocale = LocalConfiguration.current.locales[0]

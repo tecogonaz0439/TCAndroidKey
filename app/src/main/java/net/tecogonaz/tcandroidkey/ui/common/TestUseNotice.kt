@@ -32,11 +32,9 @@ import net.tecogonaz.tcandroidkey.R
 
 /**
  * 本アプリの注意書き (テスト専用・物理セキュリティキーの代替として使用しないこと)。
- *
- * @param compact true の場合は要点 (1 文) のみを表示する (ホーム画面用)。
  */
 @Composable
-fun TestUseNoticeCard(modifier: Modifier = Modifier, compact: Boolean = false) {
+fun TestUseNoticeCard(modifier: Modifier = Modifier) {
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -55,7 +53,7 @@ fun TestUseNoticeCard(modifier: Modifier = Modifier, compact: Boolean = false) {
                     modifier = Modifier.semantics { heading() }
                 )
                 Text(
-                    text = stringResource(if (compact) R.string.notice_summary else R.string.notice_body),
+                    text = stringResource(R.string.notice_body),
                     style = MaterialTheme.typography.bodyMedium
                 )
             }

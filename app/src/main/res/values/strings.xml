@@ -162,10 +162,8 @@
     <string name="hce_aid_group_description">FIDO2 / CTAP2</string>
     <!-- Notice / Language -->
     <string name="notice_title">For testing only</string>
-    <string name="notice_summary">A tool for testing FIDO / FIDO2 web applications. Do not use it as a replacement for physical security keys such as YubiKey, and register it only with test accounts.</string>
     <string name="notice_body">TCAndroidKey is a tool for testing web applications that use FIDO / FIDO2 (WebAuthn). Do not use it as a replacement for physical security keys such as YubiKey.\n\n• Register it only with test accounts and test environments. Do not register it with production services or important accounts.\n• It is not FIDO Certified, and its security does not match that of a dedicated security key.\n• Keys are lost when the app is uninstalled or the device is reset, and cannot be recovered.</string>
     <string name="notice_acknowledge">I understand</string>
-    <string name="settings_category_notice">Notice</string>
     <string name="settings_language">Language</string>
     <string name="settings_language_system_default">System default (%1$s)</string>
     <string name="about_notice">Notice</string>
