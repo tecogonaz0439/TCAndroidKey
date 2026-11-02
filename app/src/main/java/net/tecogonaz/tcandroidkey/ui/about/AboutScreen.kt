@@ -26,6 +26,7 @@ import net.tecogonaz.tcandroidkey.ui.common.SettingItemClickable
 import net.tecogonaz.tcandroidkey.ui.common.SettingItemReadOnly
 import net.tecogonaz.tcandroidkey.ui.common.SettingsCategoryTitle
 import net.tecogonaz.tcandroidkey.ui.common.SettingsHelpText
+import net.tecogonaz.tcandroidkey.ui.common.TestUseNoticeCard
 import net.tecogonaz.tcandroidkey.ui.common.mouseDragScroll
 
 private const val REPOSITORY_URL = "https://github.com/tecogonaz0439/TCAndroidKey"
@@ -50,6 +51,9 @@ fun AboutScreen(actions: UiActions) {
             SettingItemReadOnly(stringResource(R.string.about_aaguid), aaguidString())
             SettingItemReadOnly(stringResource(R.string.about_protocols), stringResource(R.string.about_protocols_value))
             SettingItemReadOnly(stringResource(R.string.about_algorithms), "ES256 (ECDSA P-256 / SHA-256)")
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            SettingsCategoryTitle(stringResource(R.string.about_notice))
+            TestUseNoticeCard(modifier = Modifier.padding(bottom = 8.dp))
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             SettingsCategoryTitle(stringResource(R.string.about_security))
             SettingsHelpText(stringResource(R.string.about_security_text))

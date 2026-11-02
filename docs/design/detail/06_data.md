@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCAK-DD-06 |
-| 版数 | 1.1 |
+| 版数 | 1.2 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.2 (2026-11-02): 設定 `notice_acknowledged` を追加、言語の保存先を明記 |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応 (等価性・順序、読み込み失敗の扱い、logcat 出力、巻き戻しの非検出)。`review/FIX_PLAN.md` |
 | 実装 | `fido-core/.../ctap2/CredentialStore.kt`, `app/.../keystore/MetadataStore.kt`, `data/SettingsRepository.kt`, `data/EventLogRepository.kt` |
 | 関連要件 | FR-07, FR-17, FR-18, SEC-05, SEC-06, SEC-08 |
@@ -111,6 +112,9 @@ root / file / database / sharedpref / external をすべて除外。
 | `allow_reset_from_client` | Boolean | false | | OS からのリセットを許可 |
 | `prefer_strongbox` | Boolean | true | | 新規鍵を StrongBox に生成 (非搭載時は無効) |
 | `bluetooth_enabled` | Boolean | false | | Bluetooth HID (実験的) |
+| `notice_acknowledged` | Boolean | false | | 初回起動時の注意書き (DL-03) を確認済み |
+
+表示言語はアプリの設定ファイルには保存せず、OS のアプリ別言語設定 (`LocaleManager`) に保存される (DD-08 §5.1)。
 
 範囲外・不明な値は既定値として読み込む。
 

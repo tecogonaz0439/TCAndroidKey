@@ -7,6 +7,7 @@ import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Intent
+import android.net.Uri
 import android.nfc.NfcAdapter
 import android.nfc.cardemulation.CardEmulation
 import android.os.Bundle
@@ -34,6 +35,7 @@ import net.tecogonaz.tcandroidkey.nfc.FidoHostApduService
 import net.tecogonaz.tcandroidkey.ui.AppRoot
 import net.tecogonaz.tcandroidkey.ui.MainViewModel
 import net.tecogonaz.tcandroidkey.ui.UiActions
+import net.tecogonaz.tcandroidkey.ui.common.TestUseNoticeDialog
 import net.tecogonaz.tcandroidkey.ui.theme.TCAndroidKeyTheme
 import android.graphics.Color as AndroidColor
 
@@ -81,7 +83,11 @@ class MainActivity : ComponentActivity() {
                     launchSafely(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
                 }
             },
-            openUrl = { url -> launchSafely(Intent(Intent.ACTION_VIEW, url.toUri())) }
+            openUrl = { url -> launchSafely(Intent(Intent.ACTION_VIEW, url.toUri())) },
+            openAppLanguageSettings = {
+                // TCSameuraDamMonitor と同様に、OS のアプリ別言語設定 (locales_config.xml の en / ja) を開く。
+                launchSafely(Intent(Settings.ACTION_APP_LOCALE_SETTINGS, Uri.fromParts("package", packageName, null)))
+            }
         )
 
         setContent {
@@ -109,6 +115,10 @@ class MainActivity : ComponentActivity() {
             }
             TCAndroidKeyTheme(darkTheme = useDarkTheme) {
                 AppRoot(viewModel = viewModel, actions = actions)
+                // 初回起動時に注意書き (テスト専用・物理キーの代替として使用しない) を確認してもらう。
+                if (!settings.noticeAcknowledged) {
+                    TestUseNoticeDialog(onAcknowledge = { viewModel.updateSettings { it.copy(noticeAcknowledged = true) } })
+                }
             }
         }
 

@@ -43,7 +43,8 @@ class SettingsRepository(context: Context) {
             attestationMode = enumOrDefault(prefs.getString(KEY_ATTESTATION, null), d.attestationMode),
             allowResetFromClient = prefs.getBoolean(KEY_ALLOW_RESET, d.allowResetFromClient),
             preferStrongBox = prefs.getBoolean(KEY_STRONGBOX, d.preferStrongBox),
-            bluetoothEnabled = prefs.getBoolean(KEY_BLUETOOTH, d.bluetoothEnabled)
+            bluetoothEnabled = prefs.getBoolean(KEY_BLUETOOTH, d.bluetoothEnabled),
+            noticeAcknowledged = prefs.getBoolean(KEY_NOTICE_ACKNOWLEDGED, d.noticeAcknowledged)
         )
     }
 
@@ -58,6 +59,7 @@ class SettingsRepository(context: Context) {
             putBoolean(KEY_ALLOW_RESET, s.allowResetFromClient)
             putBoolean(KEY_STRONGBOX, s.preferStrongBox)
             putBoolean(KEY_BLUETOOTH, s.bluetoothEnabled)
+            putBoolean(KEY_NOTICE_ACKNOWLEDGED, s.noticeAcknowledged)
         }
     }
 
@@ -75,5 +77,6 @@ class SettingsRepository(context: Context) {
         const val KEY_ALLOW_RESET = "allow_reset_from_client"
         const val KEY_STRONGBOX = "prefer_strongbox"
         const val KEY_BLUETOOTH = "bluetooth_enabled"
+        const val KEY_NOTICE_ACKNOWLEDGED = "notice_acknowledged"
     }
 }

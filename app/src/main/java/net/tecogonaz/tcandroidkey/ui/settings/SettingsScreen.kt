@@ -3,6 +3,7 @@
 
 package net.tecogonaz.tcandroidkey.ui.settings
 
+import android.app.LocaleManager
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,9 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -27,10 +31,12 @@ import net.tecogonaz.tcandroidkey.domain.AppSettings
 import net.tecogonaz.tcandroidkey.fido.ctap2.AttestationMode
 import net.tecogonaz.tcandroidkey.ui.MainViewModel
 import net.tecogonaz.tcandroidkey.ui.UiActions
+import net.tecogonaz.tcandroidkey.ui.common.SettingItemClickable
 import net.tecogonaz.tcandroidkey.ui.common.SettingItemDropdown
 import net.tecogonaz.tcandroidkey.ui.common.SettingItemSwitch
 import net.tecogonaz.tcandroidkey.ui.common.SettingsCategoryTitle
 import net.tecogonaz.tcandroidkey.ui.common.SettingsHelpText
+import net.tecogonaz.tcandroidkey.ui.common.TestUseNoticeCard
 import net.tecogonaz.tcandroidkey.ui.common.ThemeSettingItem
 import net.tecogonaz.tcandroidkey.ui.common.mouseDragScroll
 
@@ -53,7 +59,29 @@ fun SettingsScreen(viewModel: MainViewModel, actions: UiActions) {
                 .verticalScroll(scrollState)
                 .padding(16.dp)
         ) {
+            SettingsCategoryTitle(stringResource(R.string.settings_category_notice))
+            TestUseNoticeCard(modifier = Modifier.padding(bottom = 8.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
             SettingsCategoryTitle(stringResource(R.string.settings_category_display))
+            // 言語 (TCSameuraDamMonitor と同じく OS のアプリ別言語設定を開く)
+            val effectiveLocale = LocalConfiguration.current.locales[0]
+            val context = LocalContext.current
+            val isAppLocaleSystemDefault = remember(effectiveLocale) {
+                runCatching {
+                    context.getSystemService(LocaleManager::class.java)?.applicationLocales?.isEmpty ?: true
+                }.getOrDefault(true)
+            }
+            val languageName = effectiveLocale.getDisplayName(effectiveLocale)
+            SettingItemClickable(
+                title = stringResource(R.string.settings_language),
+                subtitle = if (isAppLocaleSystemDefault) {
+                    stringResource(R.string.settings_language_system_default, languageName)
+                } else {
+                    languageName
+                },
+                onClick = actions.openAppLanguageSettings
+            )
             ThemeSettingItem(currentTheme = settings.theme) { theme ->
                 viewModel.updateSettings { it.copy(theme = theme) }
             }

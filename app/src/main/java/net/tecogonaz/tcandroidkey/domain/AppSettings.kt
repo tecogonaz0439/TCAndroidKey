@@ -17,6 +17,7 @@ enum class AppTheme { SYSTEM, LIGHT, DARK }
  * @property allowResetFromClient クライアント (OS の「セキュリティキーのリセット」等) からの全削除を許可する。
  * @property preferStrongBox 新規鍵を StrongBox に生成する (非対応端末では TEE)。
  * @property bluetoothEnabled Bluetooth HID トランスポート (実験的) を有効にする。
+ * @property noticeAcknowledged 初回起動時の注意書き (テスト専用であること) を確認済みか。
  */
 data class AppSettings(
     val theme: AppTheme = AppTheme.SYSTEM,
@@ -27,7 +28,8 @@ data class AppSettings(
     val attestationMode: AttestationMode = AttestationMode.NONE,
     val allowResetFromClient: Boolean = false,
     val preferStrongBox: Boolean = true,
-    val bluetoothEnabled: Boolean = false
+    val bluetoothEnabled: Boolean = false,
+    val noticeAcknowledged: Boolean = false
 ) {
     companion object {
         const val DEFAULT_AUTH_WINDOW_SECONDS: Int = 60

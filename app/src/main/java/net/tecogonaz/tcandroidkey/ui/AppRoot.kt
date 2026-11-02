@@ -92,7 +92,9 @@ data class UiActions(
     val openSecuritySettings: () -> Unit,
     val requestBluetoothPermission: () -> Unit,
     val makeDiscoverable: () -> Unit,
-    val openUrl: (String) -> Unit
+    val openUrl: (String) -> Unit,
+    /** OS のアプリ別言語設定 (Android 13 以降) を開く。 */
+    val openAppLanguageSettings: () -> Unit
 )
 
 internal enum class NavigationLayout { DRAWER, PERMANENT }
