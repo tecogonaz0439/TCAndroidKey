@@ -13,7 +13,7 @@ set -euo pipefail
 ANDROID_HOME="${ANDROID_HOME:-/opt/android-sdk}"
 # https://developer.android.com/studio#command-line-tools-only の Linux 版のビルド番号
 CMDLINE_TOOLS_BUILD="${CMDLINE_TOOLS_BUILD:-13114758}"
-PLATFORM="${ANDROID_PLATFORM:-platforms;android-37}"
+PLATFORM="${ANDROID_PLATFORM:-platforms;android-37.0}"
 
 mkdir -p "$ANDROID_HOME/cmdline-tools"
 if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then

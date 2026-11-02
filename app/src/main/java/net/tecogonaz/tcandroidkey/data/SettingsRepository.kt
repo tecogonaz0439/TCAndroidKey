@@ -5,6 +5,7 @@ package net.tecogonaz.tcandroidkey.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -47,17 +48,17 @@ class SettingsRepository(context: Context) {
     }
 
     private fun save(s: AppSettings) {
-        prefs.edit()
-            .putString(KEY_THEME, s.theme.name)
-            .putInt(KEY_AUTH_WINDOW, s.authWindowSeconds)
-            .putBoolean(KEY_ONE_TIME, s.oneTimeAuthorization)
-            .putBoolean(KEY_BIOMETRIC_ONLY, s.biometricOnly)
-            .putBoolean(KEY_PROMPT_ON_TAP, s.promptOnTap)
-            .putString(KEY_ATTESTATION, s.attestationMode.name)
-            .putBoolean(KEY_ALLOW_RESET, s.allowResetFromClient)
-            .putBoolean(KEY_STRONGBOX, s.preferStrongBox)
-            .putBoolean(KEY_BLUETOOTH, s.bluetoothEnabled)
-            .apply()
+        prefs.edit {
+            putString(KEY_THEME, s.theme.name)
+            putInt(KEY_AUTH_WINDOW, s.authWindowSeconds)
+            putBoolean(KEY_ONE_TIME, s.oneTimeAuthorization)
+            putBoolean(KEY_BIOMETRIC_ONLY, s.biometricOnly)
+            putBoolean(KEY_PROMPT_ON_TAP, s.promptOnTap)
+            putString(KEY_ATTESTATION, s.attestationMode.name)
+            putBoolean(KEY_ALLOW_RESET, s.allowResetFromClient)
+            putBoolean(KEY_STRONGBOX, s.preferStrongBox)
+            putBoolean(KEY_BLUETOOTH, s.bluetoothEnabled)
+        }
     }
 
     private inline fun <reified T : Enum<T>> enumOrDefault(name: String?, default: T): T =

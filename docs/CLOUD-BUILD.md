@@ -2,20 +2,16 @@
 
 クラウドセッションでは **APK の作成のみ** を行い、インストール・デバッグはローカルの Android 端末で行う。
 
-## 1. 現状 (初回セッションでの確認結果)
+## 1. 確認結果
 
-既定のネットワークポリシーでは次のホストが拒否されたため、クラウドで Android アプリ (`app`) をビルドできなかった。
+| 時点 | 結果 |
+|---|---|
+| 初回 (既定のネットワークポリシー) | `dl.google.com` が拒否 (403) され、Android SDK と Google Maven (AndroidX・AGP) を取得できず `app` はビルド不可。`fido-core` のみコンテナ内の Kotlin コンパイラでビルド・テスト |
+| 2.1〜2.3 の設定後 | SDK インストール、`./gradlew :fido-core:test assembleDebug lintDebug` すべて成功 (テスト 39 件成功、lint エラー 0) |
 
-| ホスト | 用途 | 結果 |
-|---|---|---|
-| `dl.google.com` | Android SDK (cmdline-tools / platforms / build-tools)、Google Maven (AndroidX・AGP) の実体 | **403 (拒否)** |
-| `maven.google.com` | Google Maven (`dl.google.com` へリダイレクト) | 到達するがリダイレクト先が拒否 |
-| `repo.maven.apache.org` | Maven Central | 429 (レート制限・一時的) |
-| `services.gradle.org` → `github.com` | Gradle 本体 | OK |
-| `plugins.gradle.org` | Gradle プラグインポータル | OK |
-
-`fido-core` (FIDO/CTAP2 のプロトコル実装) は SDK 不要のため、コンテナ内の Kotlin コンパイラで
-ビルドし、単体テスト 39 件の成功を確認済み。
+> **Maven Central の HTTP 429**: クラウドの共有 IP では `repo.maven.apache.org` が 429 (Too Many Requests) を返すことがある。
+> `gradle.properties` で Gradle の依存取得リトライを 12 回・初期待機 3 秒に増やしてある。
+> それでも失敗した場合は、取得済みの依存はキャッシュされるため、少し待って同じコマンドを再実行すれば先へ進む。
 
 ## 2. 環境設定 (ユーザー側で実施)
 
@@ -70,7 +66,7 @@ if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
 fi
 SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
 yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null || true
-"$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platform-tools" "platforms;android-37"
+"$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platform-tools" "platforms;android-37.0"
 cat > /etc/profile.d/android-sdk.sh <<PROFILE
 export ANDROID_HOME="$ANDROID_HOME"
 export ANDROID_SDK_ROOT="$ANDROID_HOME"

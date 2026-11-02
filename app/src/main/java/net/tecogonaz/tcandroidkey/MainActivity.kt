@@ -7,7 +7,6 @@ import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Intent
-import android.net.Uri
 import android.nfc.NfcAdapter
 import android.nfc.cardemulation.CardEmulation
 import android.os.Bundle
@@ -21,6 +20,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.getValue
+import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -80,7 +80,7 @@ class MainActivity : ComponentActivity() {
                     launchSafely(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
                 }
             },
-            openUrl = { url -> launchSafely(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+            openUrl = { url -> launchSafely(Intent(Intent.ACTION_VIEW, url.toUri())) }
         )
 
         setContent {
