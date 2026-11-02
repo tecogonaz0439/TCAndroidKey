@@ -1,19 +1,43 @@
-*.iml
+# ビルド時の生成物は Git の管理対象外とする (APK を含む)。
+# APK は scripts/cicd/build-apk.sh で build/cicd/apk/ に出力される。
+
+# --- Gradle / Kotlin のビルド出力とキャッシュ
 .gradle
 .kotlin
-/local.properties
-local.properties
-/.idea/
-.DS_Store
 /build
 build/
-/captures
 .externalNativeBuild
 .cxx
+
+# --- ビルド生成物 (ビルドディレクトリ外にコピーされた場合も含めて除外)
+*.apk
+*.aab
+*.ap_
+*.apks
+*.dex
+*.class
+output-metadata.json
+
+# --- IDE・OS
+*.iml
+/.idea/
+/captures
+*.hprof
+.DS_Store
+
+# --- 端末ごとの設定 (SDK のパス)
+/local.properties
+local.properties
+
+# --- 署名鍵 (release 用は管理対象外。共通の debug 鍵のみ管理する: BD-05 R-06)
 /keystore/
 *.jks
 *.keystore
 !app/debug.keystore
+
+# --- Python (scripts/test)
 __pycache__/
 *.pyc
+
+# --- レビュー用に作成したソースアーカイブ
 /review/*.zip
