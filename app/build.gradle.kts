@@ -89,3 +89,37 @@ dependencies {
 
     debugImplementation(libs.androidx.ui.tooling)
 }
+
+// 利用規約・セキュリティポリシーは、リポジトリの Markdown (docs/TERMS*.md, SECURITY.md, docs/SECURITY-ja.md) を
+// 唯一の原本とし、ビルド時に assets/legal/ へコピーしてアプリ内で表示する (本文をコードに二重に持たない)。
+abstract class CopyLegalDocumentsTask : DefaultTask() {
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract val documents: ConfigurableFileCollection
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val target = outputDir.get().asFile.resolve("legal")
+        target.deleteRecursively()
+        target.mkdirs()
+        documents.files.forEach { it.copyTo(target.resolve(it.name), overwrite = true) }
+    }
+}
+
+val copyLegalDocuments = tasks.register<CopyLegalDocumentsTask>("copyLegalDocuments") {
+    documents.from(
+        rootProject.file("docs/TERMS.md"),
+        rootProject.file("docs/TERMS-ja.md"),
+        rootProject.file("SECURITY.md"),
+        rootProject.file("docs/SECURITY-ja.md")
+    )
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(copyLegalDocuments, CopyLegalDocumentsTask::outputDir)
+    }
+}

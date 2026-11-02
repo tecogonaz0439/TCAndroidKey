@@ -162,9 +162,19 @@
     <string name="hce_aid_group_description">FIDO2 / CTAP2</string>
     <!-- Notice / Language -->
     <string name="notice_title">For testing only</string>
-    <string name="notice_body">TCAndroidKey is a tool for testing web applications that use FIDO / FIDO2 (WebAuthn). Do not use it as a replacement for physical security keys such as YubiKey.\n\n• Register it only with test accounts and test environments. Do not register it with production services or important accounts.\n• It is not FIDO Certified, and its security does not match that of a dedicated security key.\n• Keys are lost when the app is uninstalled or the device is reset, and cannot be recovered.</string>
+    <string name="notice_body">TCAndroidKey is a tool for testing web applications that use FIDO / FIDO2 (WebAuthn). Do not use it as a replacement for physical security keys such as YubiKey.\n\n• Register it only with test accounts and test environments. Do not register it with production services or important accounts.\n• It is not FIDO Certified, and its security does not match that of a dedicated security key.\n• Keys are lost when the app is uninstalled or the device is reset, and cannot be recovered.\n\nSee the Terms of Use in About for details.</string>
     <string name="notice_acknowledge">I understand</string>
     <string name="settings_language">Language</string>
     <string name="settings_language_system_default">System default (%1$s)</string>
-    <string name="about_notice">Notice</string>
+    <!-- Terms / Security policy -->
+    <string name="about_legal">Terms and policies</string>
+    <string name="doc_terms">Terms of Use</string>
+    <string name="doc_terms_ja">利用規約 (日本語)</string>
+    <string name="doc_security">Security Policy</string>
+    <string name="doc_security_ja">セキュリティポリシー (日本語)</string>
+    <string name="doc_terms_item">Terms of Use</string>
+    <string name="doc_terms_item_help">Conditions of use, including use for testing only</string>
+    <string name="doc_security_item">Security Policy</string>
+    <string name="doc_security_item_help">Protection mechanisms, known limitations and how to report vulnerabilities</string>
+    <string name="desc_back">Back</string>
 </resources>

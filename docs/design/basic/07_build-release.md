@@ -46,6 +46,9 @@ Maven Central がクラウドの共有 IP に HTTP 429 を返すことがある�
 | `scripts/cicd/verify.sh` | `:fido-core:test` + `testDebugUnitTest` + `lintDebug` + `assembleDebug` |
 | `scripts/cicd/install-android.sh --apk <path>` | adb で端末にインストールして起動 |
 
+ビルド時に `copyLegalDocuments` (app/build.gradle.kts) が、利用規約・セキュリティポリシーの Markdown
+(`docs/TERMS*.md`、`SECURITY.md`、`docs/SECURITY-ja.md`) を APK の `assets/legal/` へコピーする。
+
 ## 4. 署名
 
 | 種別 | 鍵 | 方針 |
@@ -75,3 +78,4 @@ PRE-05 (利用者は開発者・テスト担当者) のため、Google Play で�
 ## 7. ライセンス
 
 Apache License 2.0。依存ライブラリは AndroidX / Jetpack Compose (Apache License 2.0)。
+利用条件は [利用規約](../../TERMS-ja.md)、セキュリティ上の位置付けと脆弱性の報告は [セキュリティポリシー](../../SECURITY-ja.md) に定める。

@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuOpen
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Key
@@ -59,10 +60,14 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import net.tecogonaz.tcandroidkey.ui.document.DocumentScreen
+import net.tecogonaz.tcandroidkey.ui.document.LegalDocument
 import kotlinx.coroutines.launch
 import net.tecogonaz.tcandroidkey.R
 import net.tecogonaz.tcandroidkey.ui.about.AboutScreen
@@ -80,6 +85,10 @@ object Routes {
     const val LOG = "log"
     const val SETTINGS = "settings"
     const val ABOUT = "about"
+
+    /** 利用規約・セキュリティポリシー (「このアプリについて」から開く)。 */
+    const val DOCUMENT = "document/{id}"
+    fun document(id: String): String = "document/$id"
 }
 
 /** Activity が提供する UI 操作 (本人確認ダイアログ、システム設定画面の起動など)。 */
@@ -127,6 +136,12 @@ fun AppRoot(viewModel: MainViewModel, actions: UiActions) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route ?: Routes.AUTHENTICATOR
+    val currentDocument = if (currentRoute == Routes.DOCUMENT) {
+        LegalDocument.fromId(backStackEntry?.arguments?.getString("id"))
+    } else {
+        null
+    }
+    val openDocument: (LegalDocument) -> Unit = { doc -> navController.navigate(Routes.document(doc.id)) }
     val layout = rememberNavigationLayout()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -157,12 +172,16 @@ fun AppRoot(viewModel: MainViewModel, actions: UiActions) {
                 TopAppBar(
                     title = {
                         AutoResizingSingleLineText(
-                            text = stringResource(titleFor(currentRoute)),
+                            text = stringResource(currentDocument?.titleRes ?: titleFor(currentRoute)),
                             style = MaterialTheme.typography.titleLarge
                         )
                     },
                     navigationIcon = {
-                        if (layout == NavigationLayout.DRAWER) {
+                        if (currentRoute == Routes.DOCUMENT) {
+                            IconButton(onClick = { navController.popBackStack() }) {
+                                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.desc_back))
+                            }
+                        } else if (layout == NavigationLayout.DRAWER) {
                             IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                 Icon(Icons.Outlined.Menu, contentDescription = stringResource(R.string.desc_open_menu))
                             }
@@ -195,7 +214,14 @@ fun AppRoot(viewModel: MainViewModel, actions: UiActions) {
                 composable(Routes.CREDENTIALS) { CredentialsScreen(viewModel, actions) }
                 composable(Routes.LOG) { EventLogScreen(viewModel) }
                 composable(Routes.SETTINGS) { SettingsScreen(viewModel, actions) }
-                composable(Routes.ABOUT) { AboutScreen(actions) }
+                composable(Routes.ABOUT) { AboutScreen(actions, onOpenDocument = openDocument) }
+                composable(
+                    Routes.DOCUMENT,
+                    arguments = listOf(navArgument("id") { type = NavType.StringType })
+                ) { entry ->
+                    val document = LegalDocument.fromId(entry.arguments?.getString("id")) ?: LegalDocument.TERMS
+                    DocumentScreen(document, actions, onOpenDocument = openDocument)
+                }
             }
         }
     }

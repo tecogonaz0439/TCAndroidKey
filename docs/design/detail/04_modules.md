@@ -198,7 +198,8 @@ classDiagram
 | `log.EventLogScreen` / `LogEntryRow` | SC-03 |
 | `settings.SettingsScreen` | SC-04 |
 | `about.AboutScreen` | SC-05 |
-| `common.*` | 流用部品 (BD-06 §4)、`formatDateTime` / `formatTime` |
+| `document.DocumentScreen` / `document.LegalDocument` | SC-06。文書の定義 (assets のパス、リポジトリのパス)、文書内リンクの解決 |
+| `common.*` | 流用部品 (BD-06 §4。`MarkdownParser` を含む)、`TestUseNoticeDialog`、`formatDateTime` / `formatTime` |
 | `theme.TCAndroidKeyTheme` | テーマ |
 
 ## 4. 主要な依存関係の生成
