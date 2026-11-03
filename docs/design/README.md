@@ -106,4 +106,4 @@ flowchart LR
 | 1.0 | 2026-11-02 | 初版 (旧 `docs/DESIGN.md` の内容を移行・拡充) |
 | 1.1 | 2026-11-02 | 外部レビュー (ChatGPT Pro、対象 `ecd6e49`) の指摘 29 件の精査と対応を反映。改訂した文書: BD-03〜05、DD-01〜10、AP-C。指摘ごとの判定と対応は [`review/FIX_PLAN.md`](../../review/FIX_PLAN.md) |
 | 1.2 | 2026-11-02 | 言語設定 (FR-19) と注意書きの表示 (FR-20) を追加。改訂した文書: BD-02、BD-06、DD-06、DD-08、DD-10 |
-| 1.3 | 2026-11-03 | 名称変更: アプリ名を「セキュリティキーエミュレータ / Security Key Emulator」、プロジェクト名・リポジトリ名を `TCSecurityKeyEmulator`、applicationId・パッケージ名を `net.tecogonaz.tcsecuritykeyemulator` に変更 (旧 `TCAndroidKey` / `net.tecogonaz.tcandroidkey`)。文書番号の接頭辞を `TCSKE-` に変更。全文書の名称・URL を更新 |
+| 1.3 | 2026-11-03 | 名称変更: アプリ名を「セキュリティキーエミュレータ / Security Key Emulator」、プロジェクト名・リポジトリ名を `TCSecurityKeyEmulator`、applicationId・パッケージ名を `net.tecogonaz.tcsecuritykeyemulator` に変更 (旧 `TCAndroidKey` / `net.tecogonaz.tcandroidkey`)。文書番号の接頭辞を `TCSKE-` に変更。全文書の名称・URL を更新。アプリのアイコン (BD-06 §6)、旧版からの移行 (BD-09 §4)、app の単体テスト (DD-10 §1.10) を追記 |

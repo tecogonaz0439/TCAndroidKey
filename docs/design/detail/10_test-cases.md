@@ -3,15 +3,16 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-10 |
-| 版数 | 1.2 |
+| 版数 | 1.3 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.3 (2026-11-03): IT-35 (利用規約・セキュリティポリシー)、UT-108〜111 (app の単体テスト) を追加 |
 | 改訂 | 1.2 (2026-11-02): IT-33 (言語設定)、IT-34 (注意書き) を追加 |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応のテスト (UT-39 置き換え、UT-40〜107、CT-05、IT-24〜32、互換性マトリクスの版・API 層)。`review/FIX_PLAN.md` |
 | 関連文書 | BD-08 テスト計画、docs/TESTING.md |
 
 ## 1. 単体テスト (UT)
 
-実行: `./gradlew :fido-core:test` (107 件。うち UT-107 は環境変数指定時のみ実行。2026-11-02 時点で全件成功)
+実行: `./gradlew :fido-core:test testDebugUnitTest` (計 111 件: fido-core 107 件、app 4 件。うち UT-107 は環境変数指定時のみ実行。2026-11-03 時点で全件成功)
 
 ### 1.1 CBOR (`CborTest`)
 
@@ -165,6 +166,15 @@
 |---|---|---|---|
 | UT-107 | exportVectors | 環境変数 `TCSKE_INTEROP_OUT` 指定時のみ、GetInfo・packed 自己アテステーションの MakeCredential・GetAssertion の応答を出力 (CT-05 で検証) | FR-04〜06, FR-16 |
 
+### 1.10 文書のリンク解決 (`LegalDocumentTest`、app モジュール)
+
+| ID | テスト | 確認内容 | 要件 |
+|---|---|---|---|
+| UT-108 | relativeLinksBetweenDocumentsStayInTheApp | 利用規約・セキュリティポリシー間の相対リンクをアプリ内の文書として解決 | FR-20 |
+| UT-109 | otherRelativeLinksOpenTheRepository | その他の相対リンク (`../LICENSE`) を GitHub の URL に変換 | FR-20 |
+| UT-110 | absoluteLinksAreOpenedAsIs | URL・`mailto:` はそのまま外部で開く | FR-20 |
+| UT-111 | allRelativeLinksInTheDocumentsExist | 4 文書内の相対リンクがすべてリポジトリ内の実在するファイルを指す (リンク切れの検出) | FR-20 |
+
 ## 2. CTAP 結合試験 (CT)
 
 `scripts/test/fido2_nfc_test.py` (python-fido2 + PC/SC) を ENV-01 / ENV-02 で実行する。
@@ -260,7 +270,7 @@ python-fido2 は 2.0.0 を基準とする (`pip install "fido2[pcsc]==2.0.0"`)�
 | FR-11〜FR-15 | UT-17〜19, 26, 58〜67, 76, 85, 86, 90, CT-04, IT-06〜10, 25, 26, 31 |
 | FR-16 | UT-12, 50, 104, CT-03, CT-05 |
 | FR-17 / FR-18 | UT-19, 74, IT-17 |
-| FR-19 / FR-20 | IT-33 / IT-34, IT-35 |
+| FR-19 / FR-20 | IT-33 / UT-108〜111, IT-34, IT-35 |
 | NFR-03 / 04 / 07 / 09 / 10 | IT-22 / IT-15 / IT-20 / IT-21, 30 / IT-19 |
 | (品質: アクセシビリティ) | IT-29 |
 | SEC-02〜SEC-04 | UT-17, 26, 64, 65, 75, 77〜79, 81, 85, IT-07, 08, 11, 16, 24, 25 |
