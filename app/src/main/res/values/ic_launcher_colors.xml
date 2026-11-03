@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ランチャーアイコンの配色 (ライトテーマ)。ダークテーマは values-night で上書きする。 -->
+<resources>
+    <color name="ic_launcher_background">#FFFFFF</color>
+    <color name="ic_launcher_foreground">#1E5AA8</color>
+</resources>

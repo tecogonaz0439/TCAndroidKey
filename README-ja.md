@@ -94,4 +94,4 @@ docs/        設計書、ビルド・テスト手順、利用規約、セキュ�
 
 ソースコードは [Apache License, Version 2.0](LICENSE) で公開しています。
 
-本アプリの UI は [TCSameuraDamMonitor-android](https://github.com/tecogonaz0439/TCSameuraDamMonitor-android) をベースにしています。
+本アプリの UI は [TCSameuraDamMonitor-android](https://github.com/tecogonaz0439/TCSameuraDamMonitor-android) をベースにしています。アプリのアイコンは [Material Symbols](https://github.com/google/material-design-icons) の「security_key」(Apache License 2.0) をもとにしています。

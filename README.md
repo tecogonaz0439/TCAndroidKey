@@ -94,4 +94,4 @@ Please report issues and submit pull requests in this repository. Report vulnera
 
 The source code is licensed under the [Apache License, Version 2.0](LICENSE).
 
-The app's UI is based on [TCSameuraDamMonitor-android](https://github.com/tecogonaz0439/TCSameuraDamMonitor-android).
+The app's UI is based on [TCSameuraDamMonitor-android](https://github.com/tecogonaz0439/TCSameuraDamMonitor-android). The app icon is based on the [Material Symbols](https://github.com/google/material-design-icons) "security_key" icon (Apache License 2.0).
