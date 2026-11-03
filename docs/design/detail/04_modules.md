@@ -8,7 +8,7 @@
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応 (`AuthorizationGate`・`AuthorizationLease` の追加、`TransportPolicy`・`onOperationCompleted`・`deleteDiscoverable` の廃止ほか)。`review/FIX_PLAN.md` |
 | 関連文書 | BD-03 アーキテクチャ |
 
-パッケージは `net.tecogonaz.tcandroidkey` を基点とする (以下では省略)。
+パッケージは `net.tecogonaz.tcsecuritykeyemulator` を基点とする (以下では省略)。
 
 ## 1. クラス図
 

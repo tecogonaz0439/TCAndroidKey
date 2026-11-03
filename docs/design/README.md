@@ -14,7 +14,8 @@
 | アプリ名 (ランチャー・サイドバー上部などの表示名) | 日本語「セキュリティキーエミュレータ」、英語「Security Key Emulator」 |
 | プロジェクト名・リポジトリ名 | `TCSecurityKeyEmulator` (https://github.com/tecogonaz0439/TCSecurityKeyEmulator) |
 | 旧名 (2026-11-03 まで) | `TCAndroidKey` |
-| 旧名のまま維持する識別子 | applicationId・パッケージ名 `net.tecogonaz.tcandroidkey`、Keystore のエイリアス (`fido_cred_*`、`tcandroidkey_metadata_v1`)、SharedPreferences 名、AAGUID。applicationId を変えると別アプリ扱いとなり、上書き更新できず登録済みの鍵も引き継げないため (BD-07 §5) |
+| applicationId・パッケージ名 | `net.tecogonaz.tcsecuritykeyemulator` (旧 `net.tecogonaz.tcandroidkey`)。旧版とは別アプリのため上書き更新できず、鍵も引き継げない (旧版はアンインストールし、鍵は再登録する。BD-07 §5) |
+| 変更しない識別子 | AAGUID (`523283ca-3c2c-48b5-8bff-a722f900e190`、認証器のモデルとして同一のため)、クレデンシャル鍵のエイリアス接頭辞 `fido_cred_` |
 
 設計書では、システム・プロジェクトを指す場合に `TCSecurityKeyEmulator`、画面の表示を指す場合にアプリ名を用いる。
 
@@ -105,4 +106,4 @@ flowchart LR
 | 1.0 | 2026-11-02 | 初版 (旧 `docs/DESIGN.md` の内容を移行・拡充) |
 | 1.1 | 2026-11-02 | 外部レビュー (ChatGPT Pro、対象 `ecd6e49`) の指摘 29 件の精査と対応を反映。改訂した文書: BD-03〜05、DD-01〜10、AP-C。指摘ごとの判定と対応は [`review/FIX_PLAN.md`](../../review/FIX_PLAN.md) |
 | 1.2 | 2026-11-02 | 言語設定 (FR-19) と注意書きの表示 (FR-20) を追加。改訂した文書: BD-02、BD-06、DD-06、DD-08、DD-10 |
-| 1.3 | 2026-11-03 | 名称変更: アプリ名を「セキュリティキーエミュレータ / Security Key Emulator」、プロジェクト名・リポジトリ名を `TCSecurityKeyEmulator` に変更 (旧 `TCAndroidKey`)。文書番号の接頭辞を `TCSKE-` に変更。全文書の名称・URL を更新 |
+| 1.3 | 2026-11-03 | 名称変更: アプリ名を「セキュリティキーエミュレータ / Security Key Emulator」、プロジェクト名・リポジトリ名を `TCSecurityKeyEmulator`、applicationId・パッケージ名を `net.tecogonaz.tcsecuritykeyemulator` に変更 (旧 `TCAndroidKey` / `net.tecogonaz.tcandroidkey`)。文書番号の接頭辞を `TCSKE-` に変更。全文書の名称・URL を更新 |

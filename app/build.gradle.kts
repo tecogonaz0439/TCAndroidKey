@@ -4,13 +4,13 @@ plugins {
 }
 
 android {
-    namespace = "net.tecogonaz.tcandroidkey"
+    namespace = "net.tecogonaz.tcsecuritykeyemulator"
     compileSdk = 37
 
     defaultConfig {
-        // アプリ名・プロジェクト名は TCSecurityKeyEmulator に変更したが、applicationId とパッケージ名は旧名のまま維持する。
-        // applicationId を変えると別アプリ扱いになり、上書き更新できず、登録済みの鍵も引き継げないため。
-        applicationId = "net.tecogonaz.tcandroidkey"
+        // 旧名 (TCAndroidKey, net.tecogonaz.tcandroidkey) から変更した。旧版とは別アプリになるため上書き更新できず、
+        // 登録済みの鍵も引き継げない (旧版はアンインストールし、鍵は再登録する)。
+        applicationId = "net.tecogonaz.tcsecuritykeyemulator"
         // Android 15 以上 (要件)。
         minSdk = 35
         targetSdk = 37

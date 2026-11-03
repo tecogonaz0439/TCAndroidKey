@@ -5,7 +5,7 @@
 | 文書番号 | TCSKE-BD-07 |
 | 版数 | 1.3 |
 | 作成日 | 2026-11-02 |
-| 改訂 | 1.3 (2026-11-03): 名称変更 (APK 名・環境変数名・release 鍵のファイル名、applicationId の維持) |
+| 改訂 | 1.3 (2026-11-03): 名称変更 (APK 名・環境変数名・release 鍵のファイル名・applicationId) |
 | 関連文書 | docs/CLOUD-BUILD.md、docs/LOCAL-BUILD-macOS.md |
 
 ## 1. 開発環境
@@ -66,7 +66,7 @@ Maven Central がクラウドの共有 IP に HTTP 429 を返すことがある�
 | `versionName` | セマンティックバージョニング (`0.y.z` はテスト版) |
 | `versionCode` | リリース毎に 1 ずつ増やす |
 | ライブラリ | TCSameuraDamMonitor-android の `libs.versions.toml` に合わせて更新する |
-| applicationId | `net.tecogonaz.tcandroidkey` で固定する。名称変更 (旧 TCAndroidKey → TCSecurityKeyEmulator) 後も変更しない。変えると別アプリ扱いとなり、上書き更新できず、登録済みの鍵も引き継げない |
+| applicationId | `net.tecogonaz.tcsecuritykeyemulator`。1.3 の名称変更で旧 `net.tecogonaz.tcandroidkey` から変更した (旧版とは別アプリのため上書き更新できず、鍵も引き継げない)。以降は変更しない |
 
 ## 6. 配布
 

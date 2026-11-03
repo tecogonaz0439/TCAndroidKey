@@ -56,7 +56,7 @@ root / file / database / sharedpref / external をすべて除外。
 | 0 | 12 | GCM IV (Keystore が生成) |
 | 12 | 可変 | AES-256-GCM 暗号文 ‖ 認証タグ (128 bit) |
 
-- 暗号鍵: Keystore エイリアス `tcandroidkey_metadata_v1`、`PURPOSE_ENCRYPT | PURPOSE_DECRYPT`、GCM / NoPadding、ユーザー認証不要 (一覧表示のため)。
+- 暗号鍵: Keystore エイリアス `tcsecuritykeyemulator_metadata_v1`、`PURPOSE_ENCRYPT | PURPOSE_DECRYPT`、GCM / NoPadding、ユーザー認証不要 (一覧表示のため)。
 - 書き込みは `AtomicFile` による原子的な置き換え。変更 (作成・削除・カウンタ更新) の都度、全件を書き直す。
 - 読み込み失敗 (ファイルなし・復号失敗) は 0 件として扱う。
 
@@ -123,7 +123,7 @@ root / file / database / sharedpref / external をすべて除外。
 | エイリアス | 種別 | 用途 |
 |---|---|---|
 | `fido_cred_<credentialId の hex>` | EC P-256 (署名) | クレデンシャル秘密鍵 |
-| `tcandroidkey_metadata_v1` | AES-256 (暗号化) | メタデータ暗号鍵 |
+| `tcsecuritykeyemulator_metadata_v1` | AES-256 (暗号化) | メタデータ暗号鍵 |
 
 全削除は `fido_cred_` で始まるエイリアスをすべて削除する (メタデータ暗号鍵は残す)。
 

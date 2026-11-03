@@ -37,5 +37,5 @@ fi
 ADB=(adb)
 [[ -n "$SERIAL" ]] && ADB+=(-s "$SERIAL")
 "${ADB[@]}" install -r "$APK"
-"${ADB[@]}" shell am start -n net.tecogonaz.tcandroidkey/.MainActivity
+"${ADB[@]}" shell am start -n net.tecogonaz.tcsecuritykeyemulator/.MainActivity
 echo "Installed and launched. Watch logs with: adb logcat -s TCSecurityKeyEmulator"
