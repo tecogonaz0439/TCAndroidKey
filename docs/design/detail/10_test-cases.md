@@ -2,7 +2,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| 文書番号 | TCAK-DD-10 |
+| 文書番号 | TCSKE-DD-10 |
 | 版数 | 1.2 |
 | 作成日 | 2026-11-02 |
 | 改訂 | 1.2 (2026-11-02): IT-33 (言語設定)、IT-34 (注意書き) を追加 |
@@ -163,7 +163,7 @@
 
 | ID | テスト | 確認内容 | 要件 |
 |---|---|---|---|
-| UT-107 | exportVectors | 環境変数 `TCAK_INTEROP_OUT` 指定時のみ、GetInfo・packed 自己アテステーションの MakeCredential・GetAssertion の応答を出力 (CT-05 で検証) | FR-04〜06, FR-16 |
+| UT-107 | exportVectors | 環境変数 `TCSKE_INTEROP_OUT` 指定時のみ、GetInfo・packed 自己アテステーションの MakeCredential・GetAssertion の応答を出力 (CT-05 で検証) | FR-04〜06, FR-16 |
 
 ## 2. CTAP 結合試験 (CT)
 
@@ -175,7 +175,7 @@
 | CT-02 | 引数なしで実行 (登録 → 再度本人確認 → 認証) | MakeCredential のフラグに UP・UV・AT、GetAssertion の署名検証 OK、counter ≥ 1 | FR-04, FR-05 |
 | CT-03 | アテステーションを「自己アテステーション」にして CT-02 | fmt = packed、`PackedAttestation` による署名検証 OK (検証できなければスクリプトは終了コード 1) | FR-16 |
 | CT-04 | 本人確認せずに `--info` | デバイスが見つからない (SELECT 拒否)、端末に本人確認ダイアログ | FR-15, SEC-04 |
-| CT-05 | 実機なし: `TCAK_INTEROP_OUT=… ./gradlew :fido-core:test --tests '*InteropVectorExport*' --rerun` → `python3 scripts/test/verify_interop_vectors.py …` | python-fido2 が GetInfo を解析し、packed 自己アテステーション (SELF) とアサーションの署名を検証できる (2026-11-02、python-fido2 2.0.0 で確認済み) | FR-04〜06, FR-16 |
+| CT-05 | 実機なし: `TCSKE_INTEROP_OUT=… ./gradlew :fido-core:test --tests '*InteropVectorExport*' --rerun` → `python3 scripts/test/verify_interop_vectors.py …` | python-fido2 が GetInfo を解析し、packed 自己アテステーション (SELF) とアサーションの署名を検証できる (2026-11-02、python-fido2 2.0.0 で確認済み) | FR-04〜06, FR-16 |
 
 python-fido2 は 2.0.0 を基準とする (`pip install "fido2[pcsc]==2.0.0"`)。試験スクリプトは低水準 API (`Ctap2`) を使い、
 内蔵 UV を `options={"uv": True}` で直接指定する。高水準 API (`Fido2Client`) は §4 の注記を参照。

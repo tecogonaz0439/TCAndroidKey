@@ -2,7 +2,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| 文書番号 | TCAK-BD-03 |
+| 文書番号 | TCSKE-BD-03 |
 | 版数 | 1.1 |
 | 作成日 | 2026-11-02 |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応 (認可判定を `fido.session.AuthorizationGate` に集約)。`review/FIX_PLAN.md` |
@@ -77,7 +77,7 @@ flowchart LR
 
 ### 4.1 オブジェクト生成 (手動 DI)
 
-`TCAndroidKeyApp` (Application) が起動時に `AppContainer` を 1 つ生成し、プロセス内のシングルトンを保持する。
+`TCSecurityKeyEmulatorApp` (Application) が起動時に `AppContainer` を 1 つ生成し、プロセス内のシングルトンを保持する。
 Activity・Service は `Context.appContainer` で参照する。
 
 ### 4.2 スレッドモデル

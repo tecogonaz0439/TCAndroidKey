@@ -8,6 +8,8 @@ android {
     compileSdk = 37
 
     defaultConfig {
+        // アプリ名・プロジェクト名は TCSecurityKeyEmulator に変更したが、applicationId とパッケージ名は旧名のまま維持する。
+        // applicationId を変えると別アプリ扱いになり、上書き更新できず、登録済みの鍵も引き継げないため。
         applicationId = "net.tecogonaz.tcandroidkey"
         // Android 15 以上 (要件)。
         minSdk = 35
@@ -27,11 +29,11 @@ android {
         }
         // リリース署名は環境変数で与える (keystore/ は Git 管理対象外)。
         create("release") {
-            storeFile = rootProject.file("keystore/tcandroidkey-release.jks")
-            storePassword = System.getenv("TCANDROIDKEY_STORE_PASSWORD")
-            keyAlias = System.getenv("TCANDROIDKEY_KEY_ALIAS") ?: "release"
-            keyPassword = System.getenv("TCANDROIDKEY_KEY_PASSWORD")
-                ?: System.getenv("TCANDROIDKEY_STORE_PASSWORD")
+            storeFile = rootProject.file("keystore/tcsecuritykeyemulator-release.jks")
+            storePassword = System.getenv("TCSKE_STORE_PASSWORD")
+            keyAlias = System.getenv("TCSKE_KEY_ALIAS") ?: "release"
+            keyPassword = System.getenv("TCSKE_KEY_PASSWORD")
+                ?: System.getenv("TCSKE_STORE_PASSWORD")
         }
     }
 

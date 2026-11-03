@@ -2,7 +2,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| 文書番号 | TCAK-BD-01 |
+| 文書番号 | TCSKE-BD-01 |
 | 版数 | 1.0 |
 | 作成日 | 2026-11-02 |
 | 関連文書 | BD-02 要件定義、BD-04 外部インターフェース、BD-05 セキュリティ方針 |
@@ -51,7 +51,7 @@ flowchart LR
         R["NFC リーダー<br/>Sony RC-S300/P"]
         AC["Android 15+ 端末<br/>クライアント (ブラウザ)"]
     end
-    APP["Android 15+ 端末<br/>TCAndroidKey<br/>= テスト用認証器"]
+    APP["Android 15+ 端末<br/>TCSecurityKeyEmulator<br/>= テスト用認証器"]
     RP[("テスト対象 Web アプリ (RP)")]
 
     PC --- R
@@ -64,7 +64,7 @@ flowchart LR
 
 | シーン | 内容 |
 |---|---|
-| S-1 | PC のブラウザで開発中の Web アプリにアクセスし、PC/SC リーダーに TCAndroidKey 端末をかざして登録・認証を試す |
+| S-1 | PC のブラウザで開発中の Web アプリにアクセスし、PC/SC リーダーに TCSecurityKeyEmulator 端末をかざして登録・認証を試す |
 | S-2 | 別の Android 端末のブラウザから、端末同士を重ねて (NFC) 登録・認証を試す |
 | S-3 | PC から CTAP レベルの試験スクリプト (python-fido2) を実行し、認証器としての応答を確認する |
 | S-4 | (実験的) PC と Bluetooth でペアリングし、HID セキュリティキーとして試す |
@@ -80,7 +80,7 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    subgraph Android["Android 端末 (TCAndroidKey)"]
+    subgraph Android["Android 端末 (TCSecurityKeyEmulator)"]
         UI["Compose UI<br/>MainActivity"]
         SES["認証受付セッション<br/>AuthSessionManager"]
         NFC["HCE サービス<br/>FidoHostApduService"]
@@ -112,7 +112,7 @@ flowchart TB
 ```mermaid
 sequenceDiagram
     actor U as テスト担当者
-    participant A as TCAndroidKey
+    participant A as TCSecurityKeyEmulator
     participant C as クライアント (PC/ブラウザ)
     participant W as テスト対象 Web アプリ
     U->>C: Web アプリで登録/ログイン操作

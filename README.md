@@ -1,8 +1,8 @@
 [日本語版はこちら](README-ja.md)
 
-# TCAndroidKey
+# Security Key Emulator
 
-**TCAndroidKey** is an Android app that turns an Android device into a **FIDO2 (CTAP 2.0) security key** for **testing web applications that use FIDO / FIDO2 (WebAuthn)**. Hold the device to an NFC reader connected to a PC (or to another Android device) to try passkey and security-key registration and sign-in on the web application you are developing.
+**Security Key Emulator** (project name: TCSecurityKeyEmulator) is an Android app that turns an Android device into a **FIDO2 (CTAP 2.0) security key** for **testing web applications that use FIDO / FIDO2 (WebAuthn)**. Hold the device to an NFC reader connected to a PC (or to another Android device) to try passkey and security-key registration and sign-in on the web application you are developing.
 
 > [!IMPORTANT]
 > **This app is a testing tool. Do not use it as a replacement for physical security keys such as YubiKey.**
@@ -39,7 +39,7 @@ The app is not distributed through app stores or GitHub Releases yet. Build the 
 scripts/cicd/build-apk.sh
 ```
 
-The APK is written to `build/cicd/apk/TCAndroidKey-debug.apk`. See [Cloud build](docs/CLOUD-BUILD.md) or [Local build on macOS](docs/LOCAL-BUILD-macOS.md) for setting up the build environment.
+The APK is written to `build/cicd/apk/TCSecurityKeyEmulator-debug.apk`. See [Cloud build](docs/CLOUD-BUILD.md) or [Local build on macOS](docs/LOCAL-BUILD-macOS.md) for setting up the build environment.
 
 Debug builds are signed with a shared key published in this repository, so that you can update the app in place (uninstalling it deletes all keys). Because anyone can create an APK with the same signature, install only APKs that you built yourself or obtained directly from the developer.
 
@@ -74,7 +74,7 @@ Known limitations (no clientPIN, CTAP 2.0 only, no U2F, no extensions, and so on
 
 ## Repository
 
-- **GitHub**: [tecogonaz0439/TCAndroidKey](https://github.com/tecogonaz0439/TCAndroidKey)
+- **GitHub**: [tecogonaz0439/TCSecurityKeyEmulator](https://github.com/tecogonaz0439/TCSecurityKeyEmulator)
 
 ```
 fido-core/   FIDO2 protocol implementation (CBOR, CTAP2, NFC APDU, CTAPHID, authorization gate). Pure Kotlin with unit tests

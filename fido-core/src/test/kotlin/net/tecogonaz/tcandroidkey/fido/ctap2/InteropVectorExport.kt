@@ -13,12 +13,12 @@ import java.io.File
 
 /**
  * 外部の検証器 (python-fido2) と照合するための応答ベクタを出力する。
- * 環境変数 TCAK_INTEROP_OUT に出力先を指定した場合のみ実行する (scripts/test/verify_interop_vectors.py で検証)。
+ * 環境変数 TCSKE_INTEROP_OUT に出力先を指定した場合のみ実行する (scripts/test/verify_interop_vectors.py で検証)。
  */
 class InteropVectorExport {
     @Test
     fun exportVectors() {
-        val out = System.getenv("TCAK_INTEROP_OUT")
+        val out = System.getenv("TCSKE_INTEROP_OUT")
         assumeTrue(out != null)
         val auth = Ctap2Authenticator(
             InMemoryCredentialStore(), FakePolicy(),

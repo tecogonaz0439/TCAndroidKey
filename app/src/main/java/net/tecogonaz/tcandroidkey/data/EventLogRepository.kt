@@ -72,6 +72,6 @@ class EventLogRepository(private val maxEntries: Int = 300) {
     }
 
     private companion object {
-        const val TAG = "TCAndroidKey"
+        const val TAG = "TCSecurityKeyEmulator"
     }
 }

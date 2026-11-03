@@ -247,7 +247,7 @@ class BluetoothHidAuthenticator(private val container: AppContainer) {
 
     companion object {
         const val TRANSPORT: String = "Bluetooth"
-        private const val SDP_NAME = "TCAndroidKey"
+        private const val SDP_NAME = "Security Key Emulator"
         private const val SDP_DESCRIPTION = "FIDO2 security key"
         private const val SDP_PROVIDER = "tecogonaz"
         private const val DISCOVERABLE_SECONDS = 120

@@ -2,7 +2,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| 文書番号 | TCAK-DD-04 |
+| 文書番号 | TCSKE-DD-04 |
 | 版数 | 1.1 |
 | 作成日 | 2026-11-02 |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応 (`AuthorizationGate`・`AuthorizationLease` の追加、`TransportPolicy`・`onOperationCompleted`・`deleteDiscoverable` の廃止ほか)。`review/FIX_PLAN.md` |
@@ -148,7 +148,7 @@ classDiagram
 
 | クラス | 責務 |
 |---|---|
-| `TCAndroidKeyApp` | Application。`AppContainer` を生成 |
+| `TCSecurityKeyEmulatorApp` | Application。`AppContainer` を生成 |
 | `AppContainer` | 手動 DI。`SettingsRepository`、`EventLogRepository`、`KeystoreCredentialStore`、`AuthSessionManager`、`BluetoothHidAuthenticator` (遅延生成)、AAGUID 定数、`newAuthenticator(transport, transports, policy)` |
 | `Context.appContainer` | コンテナ取得の拡張プロパティ |
 | `MainActivity` | 唯一の Activity。ライフサイクル連携 (BD-03 §4.4)、`UiActions` の実装、本人確認要求の購読、`FLAG_SECURE`、Bluetooth 権限要求 |
@@ -200,13 +200,13 @@ classDiagram
 | `about.AboutScreen` | SC-05 |
 | `document.DocumentScreen` / `document.LegalDocument` | SC-06。文書の定義 (assets のパス、リポジトリのパス)、文書内リンクの解決 |
 | `common.*` | 流用部品 (BD-06 §4。`MarkdownParser` を含む)、`TestUseNoticeDialog`、`formatDateTime` / `formatTime` |
-| `theme.TCAndroidKeyTheme` | テーマ |
+| `theme.TCSecurityKeyEmulatorTheme` | テーマ |
 
 ## 4. 主要な依存関係の生成
 
 ```mermaid
 sequenceDiagram
-    participant App as TCAndroidKeyApp
+    participant App as TCSecurityKeyEmulatorApp
     participant C as AppContainer
     participant Svc as FidoHostApduService
     participant BT as BluetoothHidAuthenticator

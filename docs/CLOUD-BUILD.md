@@ -85,7 +85,7 @@ PROFILE
 
 > `scripts/cicd/build-apk.sh` で debug APK を作成し、APK ファイルを送ってください。
 
-スクリプトは `build/cicd/apk/TCAndroidKey-debug.apk` と `build-info.txt` (SHA-256) を出力する。
+スクリプトは `build/cicd/apk/TCSecurityKeyEmulator-debug.apk` と `build-info.txt` (SHA-256) を出力する。
 Claude がファイルとして送付した APK を claude.ai / Claude アプリからダウンロードし、ローカルでインストールする
 (`docs/TESTING.md` の「インストール」参照)。
 
@@ -98,5 +98,5 @@ Claude がファイルとして送付した APK を claude.ai / Claude アプリ
 同じ署名になる。これにより端末上のアプリを **アンインストールせずに上書き更新** できる。
 (アンインストールすると Android Keystore 内の FIDO 鍵がすべて消え、登録済みサービスにログインできなくなる。)
 
-リリース APK を作る場合は `keystore/tcandroidkey-release.jks` (Git 管理外) を用意し、
-`TCANDROIDKEY_STORE_PASSWORD` 等を環境変数で与えて `scripts/cicd/build-apk.sh --only release` を実行する。
+リリース APK を作る場合は `keystore/tcsecuritykeyemulator-release.jks` (Git 管理外) を用意し、
+`TCSKE_STORE_PASSWORD` 等を環境変数で与えて `scripts/cicd/build-apk.sh --only release` を実行する。

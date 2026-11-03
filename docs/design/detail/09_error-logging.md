@@ -2,7 +2,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| 文書番号 | TCAK-DD-09 |
+| 文書番号 | TCSKE-DD-09 |
 | 版数 | 1.1 |
 | 作成日 | 2026-11-02 |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応 (例外の扱い、取消・失効・予約中のエラー、メタデータを読めない場合、logcat の出力内容)。`review/FIX_PLAN.md` |
@@ -80,7 +80,7 @@
 - メモリ内のみ・最大 300 件。プロセス終了または [消去] で消える (SEC-08)。
 - RP ID・ユーザー名を含むため、ログを共有する場合はテスト用アカウントであることを確認する。
 - 署名・鍵・clientDataHash などの値は記録しない。
-- logcat (タグ `TCAndroidKey`) にも出力するが、**RP ID・ユーザー名・Bluetooth ホスト名を含めない**
+- logcat (タグ `TCSecurityKeyEmulator`) にも出力するが、**RP ID・ユーザー名・Bluetooth ホスト名を含めない**
   (例: `authenticatorMakeCredential → CTAP2_OK`)。logcat は ADB・バグレポート・ログ閲覧権限を持つアプリから読めるため。
   RP ID・ユーザー名はアプリ内のログ画面 (SC-03) でのみ確認できる。
-- 実機試験時は `adb logcat -s TCAndroidKey` でコマンドと結果の流れを取得し、RP・ユーザーは SC-03 で確認する。
+- 実機試験時は `adb logcat -s TCSecurityKeyEmulator` でコマンドと結果の流れを取得し、RP・ユーザーは SC-03 で確認する。

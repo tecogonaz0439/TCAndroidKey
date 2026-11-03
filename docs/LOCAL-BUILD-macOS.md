@@ -11,14 +11,14 @@
 ## 2. 取得とビルド
 
 ```bash
-git clone https://github.com/tecogonaz0439/TCAndroidKey.git
+git clone https://github.com/tecogonaz0439/TCSecurityKeyEmulator.git
 ```
 
 ```bash
-cd TCAndroidKey
+cd TCSecurityKeyEmulator
 ```
 
-Android Studio で **Open** → `TCAndroidKey` フォルダを開く (初回 Gradle 同期で `local.properties` に `sdk.dir` が自動設定される)。
+Android Studio で **Open** → `TCSecurityKeyEmulator` フォルダを開く (初回 Gradle 同期で `local.properties` に `sdk.dir` が自動設定される)。
 実行構成 `app` を選び、接続した端末で **Run** する。
 
 コマンドラインの場合 (`ANDROID_HOME` / `JAVA_HOME` 未設定時は Android Studio の既定パスを自動で使う):
@@ -43,4 +43,4 @@ scripts/cicd/verify.sh
 - バージョンは TCSameuraDamMonitor-android と揃えている (`gradle/libs.versions.toml`)。
   AGP / Kotlin を更新する場合は両リポジトリで合わせると管理しやすい。
 - Android Studio のデバッガで HCE サービスをデバッグする場合、ブレークポイントで止めると
-  NFC 通信がタイムアウトする点に注意 (ログ `adb logcat -s TCAndroidKey` の利用を推奨)。
+  NFC 通信がタイムアウトする点に注意 (ログ `adb logcat -s TCSecurityKeyEmulator` の利用を推奨)。

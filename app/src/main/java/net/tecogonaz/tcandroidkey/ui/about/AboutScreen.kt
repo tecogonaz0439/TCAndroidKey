@@ -30,7 +30,7 @@ import net.tecogonaz.tcandroidkey.ui.common.SettingsHelpText
 import net.tecogonaz.tcandroidkey.ui.document.LegalDocument
 import net.tecogonaz.tcandroidkey.ui.common.mouseDragScroll
 
-private const val REPOSITORY_URL = "https://github.com/tecogonaz0439/TCAndroidKey"
+private const val REPOSITORY_URL = "https://github.com/tecogonaz0439/TCSecurityKeyEmulator"
 private const val LICENSE_URL = "https://www.apache.org/licenses/LICENSE-2.0"
 
 /** 「このアプリについて」画面。 */

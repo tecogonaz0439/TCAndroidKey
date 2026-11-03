@@ -1,12 +1,12 @@
 # Security Policy
 
-**Last updated: 2026-11-02**
+**Last updated: 2026-11-03**
 
 ## 1. Purpose and Scope
 
 This policy is available in Japanese ([セキュリティポリシー](docs/SECURITY-ja.md)) and English. If there is any discrepancy between the two, the Japanese version prevails.
 
-This policy describes the security positioning of **TCAndroidKey** (the "App"), its protection mechanisms, known limitations, measures expected of users, and how to report vulnerabilities.
+This policy describes the security positioning of **Security Key Emulator** (Japanese name セキュリティキーエミュレータ, project name TCSecurityKeyEmulator; the "App"), its protection mechanisms, known limitations, measures expected of users, and how to report vulnerabilities.
 
 ## 2. Security Positioning
 

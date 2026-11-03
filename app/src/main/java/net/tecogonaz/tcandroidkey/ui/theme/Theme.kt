@@ -25,7 +25,7 @@ private val LightColorScheme = lightColorScheme()
  * @param content テーマを適用する配下の Composable コンテンツ。
  */
 @Composable
-fun TCAndroidKeyTheme(
+fun TCSecurityKeyEmulatorTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     
     dynamicColor: Boolean = true,

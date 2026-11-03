@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="app_name">セキュリティキーエミュレータ</string>
     <!-- ナビゲーション -->
     <string name="nav_authenticator">セキュリティキー</string>
     <string name="nav_credentials">クレデンシャル</string>
@@ -96,7 +97,7 @@
     <string name="verify_title_delete">クレデンシャル削除のために本人確認</string>
     <string name="verify_title_delete_all">全クレデンシャル削除のために本人確認</string>
     <string name="verify_title_change_setting">設定変更のために本人確認</string>
-    <string name="verify_subtitle">TCAndroidKey</string>
+    <string name="verify_subtitle">セキュリティキーエミュレータ</string>
     <string name="msg_no_lock_screen">先に画面ロックを設定してください。</string>
     <string name="msg_no_strong_biometric">強力な (Class 3) 生体認証が登録されていません。</string>
     <string name="msg_verification_unavailable">この端末では本人確認を利用できません。</string>
@@ -153,11 +154,11 @@
     <string name="about_oss">AndroidX / Jetpack Compose (Apache License 2.0) を使用しています。</string>
 
     <!-- NFC サービス -->
-    <string name="hce_service_description">TCAndroidKey FIDO セキュリティキー</string>
+    <string name="hce_service_description">セキュリティキーエミュレータ (FIDO セキュリティキー)</string>
     <string name="hce_aid_group_description">FIDO2 / CTAP2</string>
     <!-- Notice / Language -->
     <string name="notice_title">テスト専用です</string>
-    <string name="notice_body">TCAndroidKey は、FIDO / FIDO2 (WebAuthn) を使用する Web アプリケーションのテスト用ツールです。YubiKey などの物理セキュリティキーの代替として使用しないでください。\n\n・テスト用のアカウント・環境にのみ登録してください。本番サービスや重要なアカウントには登録しないでください。\n・FIDO 認定は受けておらず、専用のセキュリティキーと同等の安全性はありません。\n・アプリのアンインストールや端末の初期化で鍵は失われ、復旧できません。\n\n詳しくは「このアプリについて」の利用規約を参照してください。</string>
+    <string name="notice_body">セキュリティキーエミュレータは、FIDO / FIDO2 (WebAuthn) を使用する Web アプリケーションのテスト用ツールです。YubiKey などの物理セキュリティキーの代替として使用しないでください。\n\n・テスト用のアカウント・環境にのみ登録してください。本番サービスや重要なアカウントには登録しないでください。\n・FIDO 認定は受けておらず、専用のセキュリティキーと同等の安全性はありません。\n・アプリのアンインストールや端末の初期化で鍵は失われ、復旧できません。\n\n詳しくは「このアプリについて」の利用規約を参照してください。</string>
     <string name="notice_acknowledge">理解しました</string>
     <string name="settings_language">言語 (Language)</string>
     <string name="settings_language_system_default">システムのデフォルト (%1$s)</string>

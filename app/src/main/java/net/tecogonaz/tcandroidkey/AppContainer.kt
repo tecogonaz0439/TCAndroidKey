@@ -48,12 +48,12 @@ class AppContainer(context: Context) {
         )
 
     companion object {
-        /** 本アプリ (TCAndroidKey) 固有の AAGUID: 523283ca-3c2c-48b5-8bff-a722f900e190 */
+        /** 本アプリ (TCSecurityKeyEmulator) 固有の AAGUID: 523283ca-3c2c-48b5-8bff-a722f900e190 */
         val AAGUID: ByteArray = Hex.decode("523283ca3c2c48b58bffa722f900e190")
     }
 }
 
-class TCAndroidKeyApp : Application() {
+class TCSecurityKeyEmulatorApp : Application() {
     lateinit var container: AppContainer
         private set
 
@@ -64,4 +64,4 @@ class TCAndroidKeyApp : Application() {
 }
 
 val Context.appContainer: AppContainer
-    get() = (applicationContext as TCAndroidKeyApp).container
+    get() = (applicationContext as TCSecurityKeyEmulatorApp).container

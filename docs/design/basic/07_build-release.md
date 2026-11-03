@@ -2,9 +2,10 @@
 
 | 項目 | 内容 |
 |---|---|
-| 文書番号 | TCAK-BD-07 |
-| 版数 | 1.0 |
+| 文書番号 | TCSKE-BD-07 |
+| 版数 | 1.3 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.3 (2026-11-03): 名称変更 (APK 名・環境変数名・release 鍵のファイル名、applicationId の維持) |
 | 関連文書 | docs/CLOUD-BUILD.md、docs/LOCAL-BUILD-macOS.md |
 
 ## 1. 開発環境
@@ -41,7 +42,7 @@ Maven Central がクラウドの共有 IP に HTTP 429 を返すことがある�
 
 | コマンド | 内容 |
 |---|---|
-| `scripts/cicd/build-apk.sh` | debug APK を `build/cicd/apk/TCAndroidKey-debug.apk` に出力し、SHA-256 を `build-info.txt` に記録 |
+| `scripts/cicd/build-apk.sh` | debug APK を `build/cicd/apk/TCSecurityKeyEmulator-debug.apk` に出力し、SHA-256 を `build-info.txt` に記録 |
 | `scripts/cicd/build-apk.sh --only release` | release APK (R8 による縮小・難読化) |
 | `scripts/cicd/verify.sh` | `:fido-core:test` + `testDebugUnitTest` + `lintDebug` + `assembleDebug` |
 | `scripts/cicd/install-android.sh --apk <path>` | adb で端末にインストールして起動 |
@@ -54,7 +55,7 @@ Maven Central がクラウドの共有 IP に HTTP 429 を返すことがある�
 | 種別 | 鍵 | 方針 |
 |---|---|---|
 | debug | `app/debug.keystore` (リポジトリ同梱、パスワード `android`) | 開発専用の共通鍵。クラウド・ローカルのどちらでビルドしても同じ署名になり、**アンインストールせずに上書き更新** できる (アンインストールすると Keystore の鍵がすべて消えるため) |
-| release | `keystore/tcandroidkey-release.jks` (Git 管理外) | 環境変数 `TCANDROIDKEY_STORE_PASSWORD` / `TCANDROIDKEY_KEY_ALIAS` / `TCANDROIDKEY_KEY_PASSWORD` で与える。未設定時は未署名 APK を出力 |
+| release | `keystore/tcsecuritykeyemulator-release.jks` (Git 管理外) | 環境変数 `TCSKE_STORE_PASSWORD` / `TCSKE_KEY_ALIAS` / `TCSKE_KEY_PASSWORD` で与える。未設定時は未署名 APK を出力 |
 
 > debug 署名と release 署名は互いに上書きできない。テスト端末では原則 debug 版を使い続ける。
 
@@ -65,6 +66,7 @@ Maven Central がクラウドの共有 IP に HTTP 429 を返すことがある�
 | `versionName` | セマンティックバージョニング (`0.y.z` はテスト版) |
 | `versionCode` | リリース毎に 1 ずつ増やす |
 | ライブラリ | TCSameuraDamMonitor-android の `libs.versions.toml` に合わせて更新する |
+| applicationId | `net.tecogonaz.tcandroidkey` で固定する。名称変更 (旧 TCAndroidKey → TCSecurityKeyEmulator) 後も変更しない。変えると別アプリ扱いとなり、上書き更新できず、登録済みの鍵も引き継げない |
 
 ## 6. 配布
 

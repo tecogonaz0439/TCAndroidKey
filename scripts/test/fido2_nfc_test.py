@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 tecogonaz <tecogonaz@kusugami-lab.net>
 # SPDX-License-Identifier: Apache-2.0
 """
-TCAndroidKey の動作確認用スクリプト (PC/SC NFC リーダー経由)。
+セキュリティキーエミュレータ (TCSecurityKeyEmulator) の動作確認用スクリプト (PC/SC NFC リーダー経由)。
 
 Windows 11 / macOS + Sony RC-S300 などの PC/SC リーダーで、ブラウザを介さずに
 CTAP2 の GetInfo → MakeCredential → GetAssertion を実行し、署名を検証する。
@@ -16,7 +16,7 @@ CTAP2 の GetInfo → MakeCredential → GetAssertion を実行し、署名を�
     - アサーションの署名を登録時の公開鍵で検証する
 
 使い方:
-    1. Android 端末で TCAndroidKey を開き「本人確認して開始」を実行する
+    1. Android 端末でセキュリティキーエミュレータを開き「本人確認して開始」を実行する
        (設定「本人確認 1 回につき認証 1 回」が ON の場合は、登録と認証の間で再度本人確認する)
     2. 端末をリーダーに載せた状態で実行する
          python3 scripts/test/fido2_nfc_test.py            # 全ステップ
@@ -36,7 +36,7 @@ try:
 except ImportError:
     sys.exit('python-fido2 が必要です: python3 -m pip install "fido2[pcsc]==2.0.0"')
 
-RP_ID = "tcandroidkey.test"
+RP_ID = "tcsecuritykeyemulator.test"
 
 
 def find_device(timeout):
@@ -78,7 +78,7 @@ def main():
     user_id = os.urandom(16)
     att = ctap.make_credential(
         cdh,
-        {"id": RP_ID, "name": "TCAndroidKey test"},
+        {"id": RP_ID, "name": "Security Key Emulator test"},
         {"id": user_id, "name": "tester@example.com", "displayName": "Tester"},
         [{"type": "public-key", "alg": -7}],
         options={"rk": True, "uv": True},

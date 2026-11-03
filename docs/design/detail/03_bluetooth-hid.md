@@ -2,7 +2,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| 文書番号 | TCAK-DD-03 |
+| 文書番号 | TCSKE-DD-03 |
 | 版数 | 1.1 |
 | 作成日 | 2026-11-02 |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応 (操作単位の取消トークン、INIT / reset による破棄、例外時の BUSY 解放、LOCK の扱い、登録解除からの復帰、停止処理の非ブロック化)。`review/FIX_PLAN.md` |
@@ -17,7 +17,7 @@
 
 | 項目 | 値 |
 |---|---|
-| name / description / provider | `TCAndroidKey` / `FIDO2 security key` / `tecogonaz` |
+| name / description / provider | `Security Key Emulator` / `FIDO2 security key` / `tecogonaz` |
 | subclass | `SUBCLASS1_NONE` |
 | QoS | 指定なし (null) |
 

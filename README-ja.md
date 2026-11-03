@@ -1,8 +1,8 @@
 [English version](README.md)
 
-# TCAndroidKey
+# セキュリティキーエミュレータ
 
-**TCAndroidKey** は、Android 端末を **FIDO2 (CTAP 2.0) セキュリティキー** として動作させ、**FIDO / FIDO2 (WebAuthn) を使用する Web アプリケーションを試験する**ための Android アプリです。PC に接続した NFC リーダー (または別の Android 端末) に端末をかざして、開発中の Web アプリケーションのパスキー・セキュリティキーの登録とサインインを試せます。
+**セキュリティキーエミュレータ** (Security Key Emulator、プロジェクト名: TCSecurityKeyEmulator) は、Android 端末を **FIDO2 (CTAP 2.0) セキュリティキー** として動作させ、**FIDO / FIDO2 (WebAuthn) を使用する Web アプリケーションを試験する**ための Android アプリです。PC に接続した NFC リーダー (または別の Android 端末) に端末をかざして、開発中の Web アプリケーションのパスキー・セキュリティキーの登録とサインインを試せます。
 
 > [!IMPORTANT]
 > **本アプリはテスト用ツールです。YubiKey などの物理セキュリティキーの代替として使用しないでください。**
@@ -39,7 +39,7 @@ USB には対応していません。Android のアプリは、root 化なしに
 scripts/cicd/build-apk.sh
 ```
 
-APK は `build/cicd/apk/TCAndroidKey-debug.apk` に出力されます。ビルド環境の準備は [クラウドでのビルド](docs/CLOUD-BUILD.md) または [macOS でのローカルビルド](docs/LOCAL-BUILD-macOS.md) を参照してください。
+APK は `build/cicd/apk/TCSecurityKeyEmulator-debug.apk` に出力されます。ビルド環境の準備は [クラウドでのビルド](docs/CLOUD-BUILD.md) または [macOS でのローカルビルド](docs/LOCAL-BUILD-macOS.md) を参照してください。
 
 debug ビルドは、アプリを上書き更新できるよう (アンインストールすると鍵がすべて削除されるため)、本リポジトリで公開している共通の鍵で署名しています。同じ署名の APK は誰でも作成できるため、自分でビルドした APK、または開発者から直接入手した APK のみをインストールしてください。
 
@@ -74,7 +74,7 @@ Windows・macOS・Android での手順ごとの確認方法 ([python-fido2](http
 
 ## リポジトリ
 
-- **GitHub**: [tecogonaz0439/TCAndroidKey](https://github.com/tecogonaz0439/TCAndroidKey)
+- **GitHub**: [tecogonaz0439/TCSecurityKeyEmulator](https://github.com/tecogonaz0439/TCSecurityKeyEmulator)
 
 ```
 fido-core/   FIDO2 プロトコル実装 (CBOR、CTAP2、NFC APDU、CTAPHID、認可ゲート)。純 Kotlin、単体テスト付き

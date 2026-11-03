@@ -1,10 +1,10 @@
 # Terms of Use
 
-**Last updated: 2026-11-02**
+**Last updated: 2026-11-03**
 
 ## 1. Scope
 
-These Terms of Use (the "Terms") set out the conditions for using **TCAndroidKey** (the "App").
+These Terms of Use (the "Terms") set out the conditions for using **Security Key Emulator** (Japanese name セキュリティキーエミュレータ, project name TCSecurityKeyEmulator; the "App").
 
 By installing, launching, or using the App, you are deemed to have agreed to these Terms. If you do not agree, do not use the App.
 
@@ -71,7 +71,7 @@ The App uses the following Android permissions.
 
 The App is not currently distributed through any app store. The source code is published in the GitHub repository.
 
-- Source code: https://github.com/tecogonaz0439/TCAndroidKey
+- Source code: https://github.com/tecogonaz0439/TCSecurityKeyEmulator
 
 Development builds (debug builds) are signed with a shared signing key that is published in the repository, so that the App can be updated in place. **Third parties can therefore create APK files with the same signature.** Install only APK files that you built yourself or obtained directly from the developer, and check the source, the authenticity of the file, and the risks of installing it yourself.
 
@@ -135,7 +135,7 @@ The Takamatsu District Court has exclusive jurisdiction as the court of first in
 
 ## 15. Contact
 
-For questions about these Terms, the App, or the license, please use the [Issues of the GitHub repository](https://github.com/tecogonaz0439/TCAndroidKey/issues). Issues are public, so do not include personal or confidential information.
+For questions about these Terms, the App, or the license, please use the [Issues of the GitHub repository](https://github.com/tecogonaz0439/TCSecurityKeyEmulator/issues). Issues are public, so do not include personal or confidential information.
 
 Report vulnerabilities as described in the [Security Policy](../SECURITY.md), not through Issues.
 

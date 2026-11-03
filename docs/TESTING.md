@@ -11,10 +11,10 @@
 
 ## 1. インストールと初期設定 (認証器となる Android 端末)
 
-1. クラウドで作成した `TCAndroidKey-debug.apk` を PC にダウンロードし、USB デバッグを有効にした端末へインストールする。
+1. クラウドで作成した `TCSecurityKeyEmulator-debug.apk` を PC にダウンロードし、USB デバッグを有効にした端末へインストールする。
 
    ```bash
-   adb install -r TCAndroidKey-debug.apk
+   adb install -r TCSecurityKeyEmulator-debug.apk
    ```
 
    (または `scripts/cicd/install-android.sh --apk <APK のパス>`)
@@ -23,7 +23,7 @@
 4. ログ確認 (任意):
 
    ```bash
-   adb logcat -s TCAndroidKey
+   adb logcat -s TCSecurityKeyEmulator
    ```
 
    logcat にはコマンド名と結果 (例 `authenticatorMakeCredential → CTAP2_OK`) のみを出力する。
@@ -121,11 +121,11 @@
 fido-core が生成した応答を python-fido2 (2.0.0) で解析・検証する (DD-10 CT-05)。
 
 ```bash
-TCAK_INTEROP_OUT=/tmp/tcak-vectors.json ./gradlew :fido-core:test --tests '*InteropVectorExport*' --rerun
+TCSKE_INTEROP_OUT=/tmp/tcske-vectors.json ./gradlew :fido-core:test --tests '*InteropVectorExport*' --rerun
 ```
 
 ```bash
-python3 scripts/test/verify_interop_vectors.py /tmp/tcak-vectors.json
+python3 scripts/test/verify_interop_vectors.py /tmp/tcske-vectors.json
 ```
 
 GetInfo の内容、packed 自己アテステーション (`type=SELF`) とアサーションの署名検証結果が表示され、最後に `OK` となる。

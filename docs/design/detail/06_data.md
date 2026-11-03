@@ -2,7 +2,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| 文書番号 | TCAK-DD-06 |
+| 文書番号 | TCSKE-DD-06 |
 | 版数 | 1.2 |
 | 作成日 | 2026-11-02 |
 | 改訂 | 1.2 (2026-11-02): 設定 `notice_acknowledged` を追加、言語の保存先を明記 |
@@ -137,7 +137,7 @@ root / file / database / sharedpref / external をすべて除外。
 | `source` | `NFC` / `Bluetooth` / `Session` / `Keystore` |
 | `message` | 内容 (DD-09 §3) |
 
-最大 300 件 (新しい順)。logcat (タグ `TCAndroidKey`) にも出力するが、logcat には RP ID・ユーザー名を含めない (DD-09 §3.3)。
+最大 300 件 (新しい順)。logcat (タグ `TCSecurityKeyEmulator`) にも出力するが、logcat には RP ID・ユーザー名を含めない (DD-09 §3.3)。
 
 ## 7. 定数
 

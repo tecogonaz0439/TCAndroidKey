@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "TCAndroidKey"
+rootProject.name = "TCSecurityKeyEmulator"
 include(":fido-core")
 include(":app")

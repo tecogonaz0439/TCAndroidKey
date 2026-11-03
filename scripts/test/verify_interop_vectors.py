@@ -4,7 +4,7 @@
 """
 fido-core が生成した CTAP2 応答 (InteropVectorExport) を python-fido2 で解析・検証する (実機不要)。
 
-    TCAK_INTEROP_OUT=/tmp/vectors.json ./gradlew :fido-core:test --tests '*InteropVectorExport*' --rerun
+    TCSKE_INTEROP_OUT=/tmp/vectors.json ./gradlew :fido-core:test --tests '*InteropVectorExport*' --rerun
     python3 scripts/test/verify_interop_vectors.py /tmp/vectors.json
 """
 import json

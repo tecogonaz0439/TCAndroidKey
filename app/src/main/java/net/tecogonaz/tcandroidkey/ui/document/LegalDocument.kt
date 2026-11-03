@@ -20,7 +20,7 @@ enum class LegalDocument(val id: String, val repoPath: String, val titleRes: Int
     val assetPath: String get() = "legal/" + repoPath.substringAfterLast('/')
 
     companion object {
-        const val REPOSITORY_URL = "https://github.com/tecogonaz0439/TCAndroidKey"
+        const val REPOSITORY_URL = "https://github.com/tecogonaz0439/TCSecurityKeyEmulator"
 
         fun fromId(id: String?): LegalDocument? = entries.firstOrNull { it.id == id }
 

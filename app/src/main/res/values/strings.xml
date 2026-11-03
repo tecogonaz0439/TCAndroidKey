@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <string name="app_name" translatable="false">TCAndroidKey</string>
+    <string name="app_name">Security Key Emulator</string>
 
     <!-- Navigation -->
     <string name="nav_authenticator">Security key</string>
@@ -100,7 +100,7 @@
     <string name="verify_title_delete">Verify to delete the credential</string>
     <string name="verify_title_delete_all">Verify to delete all credentials</string>
     <string name="verify_title_change_setting">Verify to change this setting</string>
-    <string name="verify_subtitle">TCAndroidKey</string>
+    <string name="verify_subtitle">Security Key Emulator</string>
     <string name="msg_no_lock_screen">Set up a screen lock first.</string>
     <string name="msg_no_strong_biometric">No strong (Class 3) biometric is enrolled.</string>
     <string name="msg_verification_unavailable">User verification is not available on this device.</string>
@@ -158,11 +158,11 @@
     <string name="about_oss">Uses AndroidX / Jetpack Compose (Apache License 2.0).</string>
 
     <!-- NFC service -->
-    <string name="hce_service_description">TCAndroidKey FIDO security key</string>
+    <string name="hce_service_description">Security Key Emulator (FIDO security key)</string>
     <string name="hce_aid_group_description">FIDO2 / CTAP2</string>
     <!-- Notice / Language -->
     <string name="notice_title">For testing only</string>
-    <string name="notice_body">TCAndroidKey is a tool for testing web applications that use FIDO / FIDO2 (WebAuthn). Do not use it as a replacement for physical security keys such as YubiKey.\n\n• Register it only with test accounts and test environments. Do not register it with production services or important accounts.\n• It is not FIDO Certified, and its security does not match that of a dedicated security key.\n• Keys are lost when the app is uninstalled or the device is reset, and cannot be recovered.\n\nSee the Terms of Use in About for details.</string>
+    <string name="notice_body">Security Key Emulator is a tool for testing web applications that use FIDO / FIDO2 (WebAuthn). Do not use it as a replacement for physical security keys such as YubiKey.\n\n• Register it only with test accounts and test environments. Do not register it with production services or important accounts.\n• It is not FIDO Certified, and its security does not match that of a dedicated security key.\n• Keys are lost when the app is uninstalled or the device is reset, and cannot be recovered.\n\nSee the Terms of Use in About for details.</string>
     <string name="notice_acknowledge">I understand</string>
     <string name="settings_language">Language</string>
     <string name="settings_language_system_default">System default (%1$s)</string>

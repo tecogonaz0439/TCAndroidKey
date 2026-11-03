@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import net.tecogonaz.tcandroidkey.AppContainer
-import net.tecogonaz.tcandroidkey.TCAndroidKeyApp
+import net.tecogonaz.tcandroidkey.TCSecurityKeyEmulatorApp
 import net.tecogonaz.tcandroidkey.auth.AuthSessionState
 import net.tecogonaz.tcandroidkey.bluetooth.BluetoothHidAuthenticator
 import net.tecogonaz.tcandroidkey.data.LogEntry
@@ -96,7 +96,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
-                val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as TCAndroidKeyApp
+                val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as TCSecurityKeyEmulatorApp
                 MainViewModel(app.container)
             }
         }

@@ -22,7 +22,7 @@ class LegalDocumentTest {
     @Test
     fun otherRelativeLinksOpenTheRepository() {
         assertEquals(
-            Link.External("https://github.com/tecogonaz0439/TCAndroidKey/blob/HEAD/LICENSE"),
+            Link.External("https://github.com/tecogonaz0439/TCSecurityKeyEmulator/blob/HEAD/LICENSE"),
             LegalDocument.resolve(LegalDocument.TERMS_JA, "../LICENSE")
         )
     }

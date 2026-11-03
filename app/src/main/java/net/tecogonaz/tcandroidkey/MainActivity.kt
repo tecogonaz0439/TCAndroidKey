@@ -36,7 +36,7 @@ import net.tecogonaz.tcandroidkey.ui.AppRoot
 import net.tecogonaz.tcandroidkey.ui.MainViewModel
 import net.tecogonaz.tcandroidkey.ui.UiActions
 import net.tecogonaz.tcandroidkey.ui.common.TestUseNoticeDialog
-import net.tecogonaz.tcandroidkey.ui.theme.TCAndroidKeyTheme
+import net.tecogonaz.tcandroidkey.ui.theme.TCSecurityKeyEmulatorTheme
 import android.graphics.Color as AndroidColor
 
 /**
@@ -113,7 +113,7 @@ class MainActivity : ComponentActivity() {
                 )
                 onDispose {}
             }
-            TCAndroidKeyTheme(darkTheme = useDarkTheme) {
+            TCSecurityKeyEmulatorTheme(darkTheme = useDarkTheme) {
                 AppRoot(viewModel = viewModel, actions = actions)
                 // 初回起動時に注意書き (テスト専用・物理キーの代替として使用しない) を確認してもらう。
                 if (!settings.noticeAcknowledged) {

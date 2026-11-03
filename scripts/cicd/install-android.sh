@@ -4,7 +4,7 @@ set -euo pipefail
 # ローカル PC に接続した Android 端末へ Debug APK をインストールする。
 # クラウドでビルドした APK を使う場合は --apk でパスを指定する。
 #
-#   scripts/cicd/install-android.sh --apk ~/Downloads/TCAndroidKey-debug.apk
+#   scripts/cicd/install-android.sh --apk ~/Downloads/TCSecurityKeyEmulator-debug.apk
 #   scripts/cicd/install-android.sh --build     (ローカルでビルドしてからインストール)
 
 if [[ -z "${ANDROID_HOME:-}" ]]; then
@@ -38,4 +38,4 @@ ADB=(adb)
 [[ -n "$SERIAL" ]] && ADB+=(-s "$SERIAL")
 "${ADB[@]}" install -r "$APK"
 "${ADB[@]}" shell am start -n net.tecogonaz.tcandroidkey/.MainActivity
-echo "Installed and launched. Watch logs with: adb logcat -s TCAndroidKey"
+echo "Installed and launched. Watch logs with: adb logcat -s TCSecurityKeyEmulator"

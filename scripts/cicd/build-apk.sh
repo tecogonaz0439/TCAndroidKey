@@ -17,7 +17,7 @@ fi
 if [[ -n "${JAVA_HOME:-}" ]]; then export PATH="$JAVA_HOME/bin:$PATH"; fi
 
 PROJECT="$(cd "$(dirname "$0")/../.." && pwd)"
-APP_NAME="TCAndroidKey"
+APP_NAME="TCSecurityKeyEmulator"
 ONLY="debug"
 OUTPUT_DIR="$PROJECT/build/cicd/apk"
 
@@ -28,8 +28,8 @@ Usage: build-apk.sh [--only debug|release|both] [--output <dir>]
   --only VARIANT   debug (default), release, or both
   --output DIR     Output directory (default: <repo>/build/cicd/apk)
 
-Release signing: place keystore/tcandroidkey-release.jks and set
-TCANDROIDKEY_STORE_PASSWORD (and optionally TCANDROIDKEY_KEY_ALIAS / TCANDROIDKEY_KEY_PASSWORD).
+Release signing: place keystore/tcsecuritykeyemulator-release.jks and set
+TCSKE_STORE_PASSWORD (and optionally TCSKE_KEY_ALIAS / TCSKE_KEY_PASSWORD).
 USAGE
     exit 1
 }
