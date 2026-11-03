@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- ランチャーアイコンの配色 (ダークテーマ)。 -->
-<resources>
-    <color name="ic_launcher_background">#1B1B1F</color>
-    <color name="ic_launcher_foreground">#A8C7FA</color>
-</resources>
