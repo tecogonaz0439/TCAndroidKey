@@ -7,7 +7,7 @@
 | 時点 | 結果 |
 |---|---|
 | 初回 (既定のネットワークポリシー) | `dl.google.com` が拒否 (403) され、Android SDK と Google Maven (AndroidX・AGP) を取得できず `app` はビルド不可。`fido-core` のみコンテナ内の Kotlin コンパイラでビルド・テスト |
-| 2.1〜2.3 の設定後 | SDK インストール、`./gradlew :fido-core:test assembleDebug lintDebug` すべて成功 (テスト 111 件成功 (fido-core 107 件、app 4 件。2026-11-03 時点)、lint 指摘 0) |
+| 2.1〜2.3 の設定後 | SDK インストール、`./gradlew :fido-core:test assembleDebug lintDebug` すべて成功 (テスト 122 件成功 (fido-core 118 件、app 4 件。2026-11-05 時点)、lint 指摘 0) |
 
 > **Maven Central の HTTP 429**: クラウドの共有 IP では `repo.maven.apache.org` が 429 (Too Many Requests) を返すことがある。
 > `gradle.properties` で Gradle の依存取得リトライを 12 回・初期待機 3 秒に増やしてある。

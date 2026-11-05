@@ -15,12 +15,12 @@ AI コーディングエージェント (Claude Code、Codex など) と開発�
 - **UI の流用元**: [TCSameuraDamMonitor-android](https://github.com/tecogonaz0439/TCSameuraDamMonitor-android)。UI 部品・ビルド構成・バージョンを可能な限り合わせる
 - **言語**: 利用者・設計書・コードコメントは日本語。README・利用規約・セキュリティポリシーは英語版と日本語版の両方を持つ
 
-## 2. 現在の状態 (2026-11-04 時点)
+## 2. 現在の状態 (2026-11-05 時点)
 
 - 作業ブランチ: `main` (リポジトリの既定ブランチ。旧名 `claude/friendly-sagan-ipwxxv`)
 - 実装済み: CTAP 2.0 認証器、NFC / Bluetooth HID、Keystore 保管、認可ゲート、UI 一式、言語設定、利用規約・セキュリティポリシー表示、アイコン
 - 外部レビュー (ChatGPT Pro、対象 `ecd6e49`) の指摘 29 件は精査・対応済み。判定と不採用の理由は [review/FIX_PLAN.md](review/FIX_PLAN.md)
-- 単体テスト 111 件 (fido-core 107、app 4) 全件成功、lint 指摘 0 件
+- 単体テスト 122 件 (fido-core 118、app 4) 全件成功、lint 指摘 0 件
 - **未実施**:
   - 実機試験 ([DD-10](docs/design/detail/10_test-cases.md) の IT-01〜35、特に外部レビュー対応の IT-24〜32)
   - 互換性マトリクスの記録 (DD-10 §4、[AP-C](docs/design/appendix/C_roadmap.md) F-01)

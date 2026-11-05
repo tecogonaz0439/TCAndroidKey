@@ -3,10 +3,11 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-01 |
-| 版数 | 1.1 |
+| 版数 | 1.2 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.2 (2026-11-05): PIN/UV Auth Protocol 1 / 2 の暗号処理 (§10) を追加 (コマンドからはまだ使わない) |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応 (認可の Lease 化、入力検証・処理順序・UP/UV・allowList・GetNextAssertion・上書き登録・CBOR の厳密化)。`review/FIX_PLAN.md` |
-| 実装 | `fido-core/.../ctap2/Ctap2Authenticator.kt`, `CtapConstants.kt`, `cbor/Cbor.kt` |
+| 実装 | `fido-core/.../ctap2/Ctap2Authenticator.kt`, `CtapConstants.kt`, `cbor/Cbor.kt`, `pin/PinUvAuthProtocol.kt`, `pin/CoseEcdhKey.kt`, `pin/Hkdf.kt` |
 | 関連要件 | FR-04〜FR-06, FR-10, FR-16, SEC-10 |
 
 ## 1. 共通仕様
@@ -297,3 +298,50 @@ sequenceDiagram
     A-->>C: credential2, user2
     Note over C: クライアントがアカウント選択を表示
 ```
+
+## 10. PIN/UV Auth Protocol
+
+CTAP 2.1 §6.5 の PIN/UV Auth Protocol の認証器側を `fido.pin.PinUvAuthProtocol` に実装する。
+clientPIN (0x06) の鍵交換、hmac-secret 拡張、pinUvAuthToken の検証で共通に使う。現時点ではどのコマンドからも使わない。
+
+### 10.1 共通
+
+| 操作 | 内容 |
+|---|---|
+| 鍵交換の鍵ペア | P-256 のソフトウェア鍵 (メモリ上のみ)。インスタンスの生成時と `regenerate()` で作り直す |
+| `getPublicKey()` | COSE_Key `{1: 2 (EC2), 3: -25, -1: 1 (P-256), -2: x, -3: y}`。alg の -25 は仕様上の固定値 |
+| `decapsulate(peerCoseKey)` | 相手の COSE_Key を検証し (§10.4)、ECDH の結果 Z (x 座標、32 バイト) から共有鍵を導出する |
+| `verify(key, message, signature)` | `authenticate(key, message)` と `signature` を定数時間で比較する (`MessageDigest.isEqual`)。長さが違えば不一致 |
+
+暗号処理は JCA (`KeyAgreement("ECDH")`、`Cipher("AES/CBC/NoPadding")`、`Mac("HmacSHA256")`) のみを使い、外部ライブラリを追加しない。
+入力の不正は `PinUvAuthProtocolException` とし、呼び出し側が CTAP のステータスに変換する。インスタンスはスレッドセーフではない
+(`Ctap2Authenticator.process` が直列化する)。
+
+### 10.2 Protocol 1
+
+| 項目 | 内容 |
+|---|---|
+| 共有鍵 | SHA-256(Z) (32 バイト) |
+| encrypt / decrypt | AES-256-CBC、IV はすべて 0。平文・暗号文は空でない 16 バイトの倍数 |
+| authenticate | HMAC-SHA-256(key, message) の先頭 16 バイト。key は共有鍵または pinUvAuthToken (16 / 32 バイト) |
+
+### 10.3 Protocol 2
+
+| 項目 | 内容 |
+|---|---|
+| 共有鍵 | HMAC 鍵 ‖ AES 鍵 (計 64 バイト)。各 32 バイトを HKDF-SHA-256 (salt = 32 バイトの 0、info = `"CTAP2 HMAC key"` / `"CTAP2 AES key"`) で導出 |
+| encrypt | AES-256-CBC (AES 鍵)。ランダムな IV (16 バイト) を暗号文の先頭に付ける |
+| decrypt | 先頭 16 バイトを IV とする。IV を除いた部分が空でない 16 バイトの倍数でなければ不正 |
+| authenticate | HMAC-SHA-256 (32 バイト)。key が共有鍵 (64 バイト) なら先頭の HMAC 鍵、pinUvAuthToken (32 バイト) ならそのまま使う |
+
+HKDF は `fido.pin.Hkdf` (RFC 5869) で実装し、RFC 5869 付録 A のテストベクタで確認する (DD-10 UT-112)。
+
+### 10.4 相手の公開鍵の検証
+
+| 条件 | 不正の例 |
+|---|---|
+| kty = 2 (EC2)、crv = 1 (P-256) | OKP、P-384 |
+| alg は省略可。指定されていれば -25 | -7 |
+| x・y が 32 バイトのバイト列 | 31 バイト、テキスト |
+| x・y が体の範囲内 (0 ≤ x, y < p) で、y² = x³ − 3x + b (mod p) を満たす | 曲線外の点 (無効曲線攻撃の防止) |
+

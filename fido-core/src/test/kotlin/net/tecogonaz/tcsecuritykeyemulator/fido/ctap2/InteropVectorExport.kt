@@ -4,9 +4,11 @@
 package net.tecogonaz.tcsecuritykeyemulator.fido.ctap2
 
 import net.tecogonaz.tcsecuritykeyemulator.fido.cbor.Cbor
+import net.tecogonaz.tcsecuritykeyemulator.fido.pin.PinUvAuthProtocol
 import net.tecogonaz.tcsecuritykeyemulator.fido.testutil.FakePolicy
 import net.tecogonaz.tcsecuritykeyemulator.fido.testutil.InMemoryCredentialStore
 import net.tecogonaz.tcsecuritykeyemulator.fido.testutil.TestCrypto
+import net.tecogonaz.tcsecuritykeyemulator.fido.testutil.TestPlatform
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
@@ -44,9 +46,46 @@ class InteropVectorExport {
             )
         )
         val info = auth.process(byteArrayOf(CtapCommand.GET_INFO.toByte()))
-        File(out!!).writeText(
-            """{"makeCredential":"${Hex.encode(mc)}","cdh1":"${Hex.encode(cdh1)}",""" +
-                """"getAssertion":"${Hex.encode(ga)}","cdh2":"${Hex.encode(cdh2)}","getInfo":"${Hex.encode(info)}"}"""
+        val vectors = linkedMapOf<String, Any>(
+            "makeCredential" to Hex.encode(mc),
+            "cdh1" to Hex.encode(cdh1),
+            "getAssertion" to Hex.encode(ga),
+            "cdh2" to Hex.encode(cdh2),
+            "getInfo" to Hex.encode(info),
+            "pinProtocols" to listOf(1L, 2L).map { pinProtocolVector(it) }
         )
+        File(out!!).writeText(toJson(vectors))
+    }
+
+    /**
+     * PIN/UV Auth Protocol の照合用ベクタ。テスト用のプラットフォーム鍵の秘密スカラーを出力し、
+     * 外部検証器が同じ共有鍵を導出して、認証器の暗号文と HMAC を検証できるようにする。
+     */
+    private fun pinProtocolVector(version: Long): Map<String, Any> {
+        val protocol = PinUvAuthProtocol.create(version)!!
+        val platform = TestPlatform(version.toInt())
+        val secret = protocol.decapsulate(platform.keyAgreement)
+        val authKey = protocol.getPublicKey()
+        val plaintext = ByteArray(64) { (it * 7).toByte() }
+        val message = TestCrypto.sha256("pin-uv-auth".toByteArray())
+        return linkedMapOf(
+            "version" to version,
+            "platformPrivateKey" to Hex.encode(platform.privateScalar),
+            "authenticatorKeyX" to Hex.encode(authKey[-2L] as ByteArray),
+            "authenticatorKeyY" to Hex.encode(authKey[-3L] as ByteArray),
+            "plaintext" to Hex.encode(plaintext),
+            "ciphertext" to Hex.encode(protocol.encrypt(secret, plaintext)),
+            "message" to Hex.encode(message),
+            "hmac" to Hex.encode(protocol.authenticate(secret, message))
+        )
+    }
+
+    /** 文字列・整数・リスト・マップのみの簡易 JSON 出力。 */
+    private fun toJson(value: Any): String = when (value) {
+        is String -> "\"$value\""
+        is Long, is Int -> value.toString()
+        is List<*> -> value.joinToString(",", "[", "]") { toJson(it!!) }
+        is Map<*, *> -> value.entries.joinToString(",", "{", "}") { (k, v) -> "\"$k\":${toJson(v!!)}" }
+        else -> error("unsupported JSON value: $value")
     }
 }

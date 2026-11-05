@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-10 |
-| 版数 | 1.3 |
+| 版数 | 1.4 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.4 (2026-11-05): PIN/UV Auth Protocol の単体テスト (UT-112〜122) を追加。UT-107・CT-05 に Protocol 1 / 2 の照合を追加 |
 | 改訂 | 1.3 (2026-11-03): IT-35 (利用規約・セキュリティポリシー)、UT-108〜111 (app の単体テスト) を追加 |
 | 改訂 | 1.2 (2026-11-02): IT-33 (言語設定)、IT-34 (注意書き) を追加 |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応のテスト (UT-39 置き換え、UT-40〜107、CT-05、IT-24〜32、互換性マトリクスの版・API 層)。`review/FIX_PLAN.md` |
@@ -12,7 +13,7 @@
 
 ## 1. 単体テスト (UT)
 
-実行: `./gradlew :fido-core:test testDebugUnitTest` (計 111 件: fido-core 107 件、app 4 件。うち UT-107 は環境変数指定時のみ実行。2026-11-03 時点で全件成功)
+実行: `./gradlew :fido-core:test testDebugUnitTest` (計 122 件: fido-core 118 件、app 4 件。うち UT-107 は環境変数指定時のみ実行。2026-11-05 時点で全件成功)
 
 ### 1.1 CBOR (`CborTest`)
 
@@ -164,7 +165,7 @@
 
 | ID | テスト | 確認内容 | 要件 |
 |---|---|---|---|
-| UT-107 | exportVectors | 環境変数 `TCSKE_INTEROP_OUT` 指定時のみ、GetInfo・packed 自己アテステーションの MakeCredential・GetAssertion の応答を出力 (CT-05 で検証) | FR-04〜06, FR-16 |
+| UT-107 | exportVectors | 環境変数 `TCSKE_INTEROP_OUT` 指定時のみ、GetInfo・packed 自己アテステーションの MakeCredential・GetAssertion の応答と、PIN/UV Auth Protocol 1 / 2 の照合用ベクタ (プラットフォーム鍵の秘密スカラー、認証器の公開鍵・暗号文・HMAC) を出力 (CT-05 で検証) | FR-04〜06, FR-16 |
 
 ### 1.10 文書のリンク解決 (`LegalDocumentTest`、app モジュール)
 
@@ -174,6 +175,24 @@
 | UT-109 | otherRelativeLinksOpenTheRepository | その他の相対リンク (`../LICENSE`) を GitHub の URL に変換 | FR-20 |
 | UT-110 | absoluteLinksAreOpenedAsIs | URL・`mailto:` はそのまま外部で開く | FR-20 |
 | UT-111 | allRelativeLinksInTheDocumentsExist | 4 文書内の相対リンクがすべてリポジトリ内の実在するファイルを指す (リンク切れの検出) | FR-20 |
+
+### 1.11 PIN/UV Auth Protocol (`PinUvAuthProtocolTest`)
+
+プラットフォーム側は製品コードを使わないテスト用の実装 (`testutil.TestPlatform`) で照合する。外部の検証器との照合は CT-05。
+
+| ID | テスト | 確認内容 | 要件 |
+|---|---|---|---|
+| UT-112 | hkdfMatchesRfc5869TestVectors | HKDF-SHA-256 が RFC 5869 付録 A.1〜A.3 の PRK・OKM と一致 | — (基盤) |
+| UT-113 | sharedSecretMatchesThePlatformSide | Protocol 1 / 2 の共有鍵がプラットフォーム側と一致 (32 / 64 バイト) | — (基盤) |
+| UT-114 | encryptionRoundTripsWithThePlatform | 認証器 → プラットフォーム、プラットフォーム → 認証器の暗号化と復号 | — (基盤) |
+| UT-115 | protocolOneUsesAZeroIvAndProtocolTwoARandomIv | Protocol 1 は IV 0 (同じ暗号文)、Protocol 2 はランダムな IV を先頭に付加 | — (基盤) |
+| UT-116 | authenticateMatchesThePlatformAndVerifyRejectsTampering | HMAC (16 / 32 バイト) の一致、改ざん・長さ違い・別メッセージの拒否 | SEC-10 |
+| UT-117 | tokensCanBeUsedAsHmacKeys | pinUvAuthToken を HMAC 鍵に使える (Protocol 1 は 16 / 32 バイト、Protocol 2 は 32 バイトのみ) | — (基盤) |
+| UT-118 | regenerateChangesTheKeyAgreementKey | 鍵交換の鍵の作り直しで公開鍵と共有鍵が変わる | — (基盤) |
+| UT-119 | publicKeyIsACoseEcdhKey | 公開鍵が COSE_Key (kty 2、alg -25、crv 1、32 バイトの座標、曲線上の点) | — (基盤) |
+| UT-120 | invalidPeerKeysAreRejected | 曲線外の点、kty・crv・alg の不正、座標の長さ・型の不正、p 以上の座標を拒否 (alg の省略は許可) | SEC-10 |
+| UT-121 | invalidCiphertextLengthsAreRejected | 16 の倍数でない・空の暗号文、IV のみの暗号文、鍵の長さの不正を拒否 | SEC-10 |
+| UT-122 | createReturnsNullForUnknownVersions | 番号 1 / 2 以外のプロトコルは生成しない | — (基盤) |
 
 ## 2. CTAP 結合試験 (CT)
 
@@ -185,7 +204,7 @@
 | CT-02 | 引数なしで実行 (登録 → 再度本人確認 → 認証) | MakeCredential のフラグに UP・UV・AT、GetAssertion の署名検証 OK、counter ≥ 1 | FR-04, FR-05 |
 | CT-03 | アテステーションを「自己アテステーション」にして CT-02 | fmt = packed、`PackedAttestation` による署名検証 OK (検証できなければスクリプトは終了コード 1) | FR-16 |
 | CT-04 | 本人確認せずに `--info` | デバイスが見つからない (SELECT 拒否)、端末に本人確認ダイアログ | FR-15, SEC-04 |
-| CT-05 | 実機なし: `TCSKE_INTEROP_OUT=… ./gradlew :fido-core:test --tests '*InteropVectorExport*' --rerun` → `python3 scripts/test/verify_interop_vectors.py …` | python-fido2 が GetInfo を解析し、packed 自己アテステーション (SELF) とアサーションの署名を検証できる (2026-11-02、python-fido2 2.0.0 で確認済み) | FR-04〜06, FR-16 |
+| CT-05 | 実機なし: `TCSKE_INTEROP_OUT=… ./gradlew :fido-core:test --tests '*InteropVectorExport*' --rerun` → `python3 scripts/test/verify_interop_vectors.py …` | python-fido2 が GetInfo を解析し、packed 自己アテステーション (SELF) とアサーションの署名を検証できる。PIN/UV Auth Protocol 1 / 2 について、`PinProtocolV1` / `PinProtocolV2` で導出した共有鍵で認証器の暗号文を復号でき、HMAC が一致する (2026-11-05、python-fido2 2.0.0 で確認済み) | FR-04〜06, FR-16 |
 
 python-fido2 は 2.0.0 を基準とする (`pip install "fido2[pcsc]==2.0.0"`)。試験スクリプトは低水準 API (`Ctap2`) を使い、
 内蔵 UV を `options={"uv": True}` で直接指定する。高水準 API (`Fido2Client`) は §4 の注記を参照。
@@ -274,4 +293,4 @@ python-fido2 は 2.0.0 を基準とする (`pip install "fido2[pcsc]==2.0.0"`)�
 | NFR-03 / 04 / 07 / 09 / 10 | IT-22 / IT-15 / IT-20 / IT-21, 30 / IT-19 |
 | (品質: アクセシビリティ) | IT-29 |
 | SEC-02〜SEC-04 | UT-17, 26, 64, 65, 75, 77〜79, 81, 85, IT-07, 08, 11, 16, 24, 25 |
-| SEC-07 / SEC-09 / SEC-10 | IT-18 / IT-10, 12, 13 / UT-05〜07, 09, 22, 36, 38, 40〜42, 48, 49, 54, 84, 92〜94 |
+| SEC-07 / SEC-09 / SEC-10 | IT-18 / IT-10, 12, 13 / UT-05〜07, 09, 22, 36, 38, 40〜42, 48, 49, 54, 84, 92〜94, 116, 120, 121 |

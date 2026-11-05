@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-04 |
-| 版数 | 1.1 |
+| 版数 | 1.2 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.2 (2026-11-05): `fido.pin` パッケージ (PIN/UV Auth Protocol) を追加 |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応 (`AuthorizationGate`・`AuthorizationLease` の追加、`TransportPolicy`・`onOperationCompleted`・`deleteDiscoverable` の廃止ほか)。`review/FIX_PLAN.md` |
 | 関連文書 | BD-03 アーキテクチャ |
 
@@ -141,6 +142,16 @@ classDiagram
 | `AuthorizationGate(elapsed, wallClock, oneTime, waitTimeoutMillis, listener)` | 前面・受付・ワンタイム予約・世代 (epoch) を 1 ロックで管理し、全トランスポートで共有する認可判定 (DD-05 §2)。Android 非依存で JVM の単体テスト対象 |
 | `SessionState` | `foreground`、`armedUntilElapsed`、`armedDurationMillis`、`lastAuthenticationAtMillis`、`lastAuthenticationRpId`。`isArmed(now)`、`remainingMillis(now)` |
 | `AuthorizationGate.Listener` | 状態変化 (`onStateChanged`) とワンタイム消費 (`onConsumed`) の通知 |
+
+### 2.6 `fido.pin`
+
+| クラス | 責務 |
+|---|---|
+| `PinUvAuthProtocol` (sealed) | PIN/UV Auth Protocol の認証器側 (DD-01 §10)。鍵交換の鍵ペアの保持と作り直し (`regenerate`)、`getPublicKey`、`decapsulate`、`encrypt` / `decrypt`、`authenticate` / `verify`。`create(version)` で番号から生成 |
+| `PinUvAuthProtocolOne` / `PinUvAuthProtocolTwo` | Protocol 1 (SHA-256、IV 0、16 バイトの HMAC) / Protocol 2 (HKDF、ランダム IV、32 バイトの HMAC) |
+| `CoseEcdhKey` | 鍵交換用 COSE_Key の生成・検証 (曲線上の点であることを含む) |
+| `Hkdf` | HKDF-SHA-256 (RFC 5869)、HMAC-SHA-256 |
+| `PinUvAuthProtocolException` | 入力の不正。呼び出し側で CTAP のステータスに変換する |
 
 ## 3. app
 

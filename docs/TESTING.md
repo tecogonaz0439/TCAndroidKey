@@ -132,4 +132,16 @@ TCSKE_INTEROP_OUT=/tmp/tcske-vectors.json ./gradlew :fido-core:test --tests '*In
 python3 scripts/test/verify_interop_vectors.py /tmp/tcske-vectors.json
 ```
 
-GetInfo の内容、packed 自己アテステーション (`type=SELF`) とアサーションの署名検証結果が表示され、最後に `OK` となる。
+GetInfo の内容、packed 自己アテステーション (`type=SELF`) とアサーションの署名検証結果、
+PIN/UV Auth Protocol 1 / 2 の照合結果 (`shared secret, decrypt and HMAC OK`) が表示され、最後に `OK` となる。
+
+python-fido2 2.0.0 は Python 3.10 以上が必要である。macOS 標準の Python 3.9 しかない場合は、
+ホストで wheel を取得し、コンテナ (Apple `container` 等) の Python 3.12 で実行できる。
+
+```bash
+python3 -m pip download "fido2==2.0.0" --python-version 3.12 --platform manylinux_2_34_aarch64 --platform manylinux2014_aarch64 --only-binary=:all: -d /tmp/tcske-wheels
+```
+
+```bash
+container run --rm -v /tmp:/work -v "$PWD/scripts:/scripts:ro" docker.io/library/python:3.12-slim sh -c "pip install -q --no-index --find-links /work/tcske-wheels fido2==2.0.0 && python /scripts/test/verify_interop_vectors.py /work/tcske-vectors.json"
+```
