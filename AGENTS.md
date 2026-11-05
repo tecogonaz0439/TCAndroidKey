@@ -17,7 +17,7 @@ AI コーディングエージェント (Claude Code、Codex など) と開発�
 
 ## 2. 現在の状態 (2026-11-04 時点)
 
-- 作業ブランチ: `claude/friendly-sagan-ipwxxv` (現時点ではリポジトリの既定ブランチ)
+- 作業ブランチ: `main` (リポジトリの既定ブランチ。旧名 `claude/friendly-sagan-ipwxxv`)
 - 実装済み: CTAP 2.0 認証器、NFC / Bluetooth HID、Keystore 保管、認可ゲート、UI 一式、言語設定、利用規約・セキュリティポリシー表示、アイコン
 - 外部レビュー (ChatGPT Pro、対象 `ecd6e49`) の指摘 29 件は精査・対応済み。判定と不採用の理由は [review/FIX_PLAN.md](review/FIX_PLAN.md)
 - 単体テスト 111 件 (fido-core 107、app 4) 全件成功、lint 指摘 0 件
