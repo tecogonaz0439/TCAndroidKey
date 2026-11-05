@@ -100,6 +100,12 @@
     <string name="action_cancel">Cancel</string>
     <string name="dialog_delete_title">Delete credential?</string>
     <string name="dialog_delete_message">The key for %1$s (%2$s) will be permanently deleted.</string>
+    <string name="action_edit_credential_title">Edit title</string>
+    <string name="action_save">Save</string>
+    <string name="action_clear_text">Clear</string>
+    <string name="dialog_edit_title_title">Edit title</string>
+    <string name="dialog_edit_title_label">Title</string>
+    <string name="dialog_edit_title_help">Shown only in this app (for example, a site name or an account name). Leave it empty to show "%1$s".</string>
     <string name="dialog_delete_all_title">Delete all credentials?</string>
     <plurals name="dialog_delete_all_message">
         <item quantity="one">The %1$d key stored by this app will be permanently deleted.</item>

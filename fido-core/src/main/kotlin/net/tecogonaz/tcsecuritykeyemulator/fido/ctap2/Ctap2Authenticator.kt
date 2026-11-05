@@ -241,10 +241,14 @@ class Ctap2Authenticator(
         try {
             ensureActive(grant.lease, keepAlive)
             // 上書き登録 (同一 RP・同一 user.id の discoverable) でも、旧 credential は新しい登録が
-            // 完成してから削除する (新規作成の失敗で既存の鍵を失わない)。
+            // 完成してから削除する (新規作成の失敗で既存の鍵を失わない)。タイトルは旧 credential から引き継ぐ。
             val credential = store.create(
                 rpId, rpName, user, rk,
-                CredentialOptions(hmacSecret = hmacSecret, credProtect = credProtect ?: CredProtect.USER_VERIFICATION_OPTIONAL)
+                CredentialOptions(
+                    hmacSecret = hmacSecret,
+                    credProtect = credProtect ?: CredProtect.USER_VERIFICATION_OPTIONAL,
+                    label = if (rk) inheritedLabel(rpId, user.id) else null
+                )
             ).also { created = it }
             // 拡張の出力は要求された拡張のみ (CTAP 2.1 §6.1.2 手順 15)
             val outputs = linkedMapOf<String, Any>()
@@ -464,6 +468,14 @@ class Ctap2Authenticator(
      * 先に完了した側が後から作られた credential を消さないためのもの。作成日時はストアが単調に増やす
      * ([CredentialStore.create]) ため、時計の巻き戻しの影響を受けない。
      */
+    /**
+     * 上書き登録で引き継ぐタイトル: 同じ RP・user.id の discoverable credential のうち最も新しいもののタイトル。
+     * 読み込めない場合は引き継がない (登録の可否は [CredentialStore.create] が判断する)。
+     */
+    private fun inheritedLabel(rpId: String, userId: ByteArray): String? = runCatching {
+        store.findDiscoverable(rpId).firstOrNull { it.user.id.contentEquals(userId) && it.label != null }?.label
+    }.getOrNull()
+
     private fun replaceOlderDiscoverable(newCredential: StoredCredential) {
         store.findDiscoverable(newCredential.rpId)
             .filter {

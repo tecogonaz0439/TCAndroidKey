@@ -110,3 +110,4 @@ flowchart LR
 | 1.4 | 2026-11-05 | PIN/UV Auth Protocol 1 / 2 (DD-01 §10) と hmac-secret 拡張・ClientPIN の getKeyAgreement (FR-21、DD-01 §11) を追加。改訂した文書: BD-02、BD-04、BD-05、DD-01、DD-04、DD-06〜08、DD-10、AP-C |
 | 1.5 | 2026-11-05 | CTAP 2.1 (FR-22〜24: 内蔵 UV による pinUvAuthToken、credProtect、authenticatorCredentialManagement。DD-01 §12) を追加し、`FIDO_2_0` と `FIDO_2_1` を共存させる。改訂した文書: BD-01、BD-02、BD-04、BD-05、DD-01、DD-02、DD-04〜08、DD-10、AP-A、AP-C |
 | 1.6 | 2026-11-05 | clientPIN (FR-25: PIN の設定・変更・照合・PIN によるトークン、FR-26: アプリでの PIN の表示と消去。DD-01 §13) を追加。改訂した文書: BD-02、BD-04〜06、DD-01、DD-04〜09、DD-10、AP-A、AP-C |
+| 1.7 | 2026-11-05 | クレデンシャルのタイトル (FR-27: SC-02 の 1 行目に編集可能なタイトル。既定は rp.name、なければ RP ID。上書き登録で引き継ぐ) を追加。改訂した文書: BD-02、DD-01、DD-04、DD-06、DD-08、DD-10 |

@@ -68,6 +68,7 @@ internal class MetadataStore(directory: File) {
         // 任意項目 (ない場合は false。古い版のファイルもそのまま読める)
         if (c.hmacSecret) put("hmacSecret", true)
         if (c.credProtect != CredProtect.USER_VERIFICATION_OPTIONAL) put("credProtect", c.credProtect)
+        c.label?.let { put("label", it) }
     }
 
     private fun fromJson(o: JSONObject): StoredCredential = StoredCredential(
@@ -88,7 +89,8 @@ internal class MetadataStore(directory: File) {
         securityLevel = runCatching { KeySecurityLevel.valueOf(o.getString("securityLevel")) }
             .getOrDefault(KeySecurityLevel.UNKNOWN),
         hmacSecret = o.optBoolean("hmacSecret", false),
-        credProtect = o.optInt("credProtect", CredProtect.USER_VERIFICATION_OPTIONAL)
+        credProtect = o.optInt("credProtect", CredProtect.USER_VERIFICATION_OPTIONAL),
+        label = o.optStringOrNull("label")
     )
 
     private fun JSONObject.optStringOrNull(name: String): String? = if (has(name)) getString(name) else null

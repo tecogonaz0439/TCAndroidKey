@@ -15,7 +15,7 @@
 ## Features
 
 - **FIDO2 security key over NFC** — Host-based card emulation (HCE) of the FIDO applet; CTAP 2.0 / 2.1 commands MakeCredential, GetAssertion, GetNextAssertion, GetInfo, ClientPIN (key agreement and built-in UV tokens), CredentialManagement, Selection, and Reset (optional)
-- **Passkeys and non-discoverable credentials** — ES256 (ECDSA P-256), multiple accounts per site, `none` or packed self attestation
+- **Passkeys and non-discoverable credentials** — ES256 (ECDSA P-256), multiple accounts per site, `none` or packed self attestation; give each credential an editable title in the app (a site or account name)
 - **CTAP 2.1 with built-in user verification and clientPIN** — clients get a pinUvAuthToken through on-device verification or a PIN set from the OS or browser; credProtect levels and credential management (enumerate, rename, delete) are supported. The app shows the PIN state and can clear the PIN after verification
 - **hmac-secret extension** — the CTAP extension behind WebAuthn PRF; the per-credential secret is derived from an HMAC key kept in Android Keystore
 - **Keys in the Android Keystore** — A private key is generated for each registration in StrongBox (or the TEE) and never leaves the device; delete keys individually or all at once

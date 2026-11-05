@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-10 |
-| 版数 | 1.9 |
+| 版数 | 1.10 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.10 (2026-11-05): クレデンシャルのタイトル (FR-27) の単体テスト (UT-175〜180)、IT-38 を追加 |
 | 改訂 | 1.9 (2026-11-05): コードレビュー (2026-11-05) の指摘への対応 (重複の整理)。UT-174 を追加 |
 | 改訂 | 1.8 (2026-11-05): コードレビュー (2026-11-05) の指摘への対応の単体テスト (UT-168〜173) を追加 |
 | 改訂 | 1.7 (2026-11-05): clientPIN の単体テスト (UT-157〜167)、CT-09、IT-36・IT-37 を追加。UT-10・UT-123・CT-07 を更新 |
@@ -18,7 +19,7 @@
 
 ## 1. 単体テスト (UT)
 
-実行: `./gradlew :fido-core:test testDebugUnitTest` (計 174 件: fido-core 170 件、app 4 件。うち UT-107・UT-156 は環境変数指定時のみ実行。2026-11-05 時点で全件成功)
+実行: `./gradlew :fido-core:test testDebugUnitTest` (計 180 件: fido-core 176 件、app 4 件。うち UT-107・UT-156 は環境変数指定時のみ実行。2026-11-05 時点で全件成功)
 
 ### 1.1 CBOR (`CborTest`)
 
@@ -281,6 +282,17 @@
 | UT-169 | getPinRetriesDoesNotRequireAProtocol | getPINRetries は pinUvAuthProtocol を省略できる (指定時は対応を確認し `0x02`)。他のサブコマンドは必須 | FR-25 |
 | UT-170 | protocolOneAcceptsPaddingLongerThan64Bytes | 80 バイトのパディングは Protocol 1 で可、Protocol 2 で `0x02` | FR-25 |
 
+### 1.18 クレデンシャルのタイトル (`CredentialLabelTest`)
+
+| ID | テスト | 確認内容 | 要件 |
+|---|---|---|---|
+| UT-175 | defaultTitleIsRpNameOrRpId | 既定のタイトルは rp.name、rp.name がない・空白のみなら RP ID。label があれば label (空白のみは既定) | FR-27 |
+| UT-176 | normalizeLabelTrimsAndLimitsTheLength | 前後の空白・改行を除く、制御文字は空白に、空は null、64 コードポイントで切る (サロゲートペアの途中で切らない) | FR-27 |
+| UT-177 | updateLabelChangesOnlyTheTitle | `updateLabel` は label のみ変え (正規化して保存)、等価性が変わる (UI に通知される)。空は未設定に戻す。該当なしは false | FR-27 |
+| UT-178 | overwriteInheritsTheTitle | 上書き登録で旧 credential の label を引き継ぎ、既定のタイトルは新しい rp.name になる。他のユーザーには付かない | FR-27, FR-02 |
+| UT-179 | nonDiscoverableAndUnlabeledRegistrationsDoNotInherit | label のない旧 credential の上書きでは付かない。non-discoverable の登録は引き継がない (discoverable の label は残る) | FR-27 |
+| UT-180 | updateUserKeepsTheTitle | credentialManagement のユーザー情報の更新で label は変わらない | FR-27, FR-24 |
+
 ## 2. CTAP 結合試験 (CT)
 
 `scripts/test/fido2_nfc_test.py` (python-fido2 + PC/SC) を ENV-01 / ENV-02 で実行する。
@@ -343,6 +355,7 @@ python-fido2 は 2.0.0 を基準とする (`pip install "fido2[pcsc]==2.0.0"`)�
 | IT-35 | 利用規約・セキュリティポリシー | SC-05 →「利用規約」「セキュリティポリシー」、文書内のリンク (セキュリティポリシー、LICENSE、メール) を押す。英語表示でも確認 | 表示言語の版が開き、表・太字・リンクが崩れない。文書間のリンクはアプリ内、LICENSE は GitHub、メールはメールアプリで開く。英語表示では日本語版の項目も表示される | FR-20 |
 | IT-36 | PIN の表示と消去 | CT-09 の後に SC-04「PIN」を確認 →「PIN を消去」(本人確認) → 再度 `--info` | 「設定済み (残り 8 回)」→ 消去後は「未設定」、clientPin が false。クレデンシャルは残る。本人確認を取り消すと消去しない | FR-26, SEC-09 |
 | IT-37 | OS からの PIN の設定・変更 | Windows の「設定 → アカウント → サインイン オプション → セキュリティ キー → 管理」で PIN を追加・変更する (本人確認後にかざす) | PIN を設定・変更できる。誤った現在の PIN では変更できず、SC-04 の残り回数が減る | FR-25 |
+| IT-38 | クレデンシャルのタイトル | SC-02 で編集アイコン → タイトルを入力して保存 → アプリを再起動 → 同じサイト・同じアカウントでパスキーを再登録 → 編集で空欄にして保存 | 1 行目が入力したタイトルになり、再起動後も残る。再登録後もタイトルが残る。空欄で既定 (rp.name、なければ RP ID) に戻る。本人確認は求められない。logcat に RP ID・タイトルが出ない | FR-27 |
 
 ## 4. 互換性マトリクス (CP)
 
@@ -389,6 +402,7 @@ UV 必須の登録・認証が成功する (2026-11-05、CT-07)。
 | FR-24 | UT-10, 147〜155, 159, 171, 172, 174, CT-07, CT-08 |
 | FR-25 | UT-10, 157〜170, CT-07, CT-09, IT-37 |
 | FR-26 | CT-09, IT-36 |
+| FR-27 | UT-175〜180, IT-38 |
 | NFR-03 / 04 / 07 / 09 / 10 | IT-22 / IT-15 / IT-20 / IT-21, 30 / IT-19 |
 | (品質: アクセシビリティ) | IT-29 |
 | SEC-02〜SEC-04 | UT-17, 26, 64, 65, 75, 77〜79, 81, 85, 133, 135, 139, 151, IT-07, 08, 11, 16, 24, 25 |

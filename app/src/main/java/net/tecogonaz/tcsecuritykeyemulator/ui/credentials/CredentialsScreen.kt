@@ -19,8 +19,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteForever
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.AlertDialog
@@ -32,18 +34,24 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -57,13 +65,14 @@ import net.tecogonaz.tcsecuritykeyemulator.ui.common.SettingsHelpText
 import net.tecogonaz.tcsecuritykeyemulator.ui.common.formatDateTime
 import net.tecogonaz.tcsecuritykeyemulator.ui.common.mouseDragScroll
 
-/** 登録済みクレデンシャルの一覧・個別削除・全削除画面。削除には本人確認が必要。 */
+/** 登録済みクレデンシャルの一覧・タイトルの編集・個別削除・全削除画面。削除には本人確認が必要 (タイトルの編集は不要)。 */
 @Composable
 fun CredentialsScreen(viewModel: MainViewModel, actions: UiActions) {
     val credentials by viewModel.credentials.collectAsStateWithLifecycle()
     val storage by viewModel.storageStatus.collectAsStateWithLifecycle()
     val unavailable = storage.availability == KeystoreCredentialStore.Availability.UNAVAILABLE
     var deleteTarget by remember { mutableStateOf<StoredCredential?>(null) }
+    var editTarget by remember { mutableStateOf<StoredCredential?>(null) }
     var confirmDeleteAll by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
@@ -109,7 +118,12 @@ fun CredentialsScreen(viewModel: MainViewModel, actions: UiActions) {
                 }
             }
             items(credentials, key = { it.idHex }) { credential ->
-                CredentialCard(credential = credential, onDelete = { deleteTarget = credential })
+                CredentialCard(
+                    credential = credential,
+                    editable = !unavailable,
+                    onEdit = { editTarget = credential },
+                    onDelete = { deleteTarget = credential }
+                )
             }
             item { Spacer(modifier = Modifier.size(16.dp)) }
         }
@@ -123,7 +137,7 @@ fun CredentialsScreen(viewModel: MainViewModel, actions: UiActions) {
                 Text(
                     stringResource(
                         R.string.dialog_delete_message,
-                        target.rpName ?: target.rpId,
+                        target.title,
                         target.user.name ?: target.user.displayName ?: "-"
                     )
                 )
@@ -136,6 +150,17 @@ fun CredentialsScreen(viewModel: MainViewModel, actions: UiActions) {
             },
             dismissButton = {
                 TextButton(onClick = { deleteTarget = null }) { Text(stringResource(R.string.action_cancel)) }
+            }
+        )
+    }
+
+    editTarget?.let { target ->
+        EditTitleDialog(
+            credential = target,
+            onDismiss = { editTarget = null },
+            onSave = { label ->
+                editTarget = null
+                viewModel.updateCredentialLabel(target, label)
             }
         )
     }
@@ -162,6 +187,61 @@ fun CredentialsScreen(viewModel: MainViewModel, actions: UiActions) {
             }
         )
     }
+}
+
+/**
+ * タイトルの編集 (FR-27)。空欄で保存すると既定のタイトル (rp.name、なければ RP ID) に戻る。
+ * 入力は [StoredCredential.MAX_LABEL_LENGTH] コードポイントまで。保存時の正規化はストアが行う。
+ */
+@Composable
+private fun EditTitleDialog(credential: StoredCredential, onDismiss: () -> Unit, onSave: (String?) -> Unit) {
+    val initial = credential.label.orEmpty()
+    var text by remember(credential.idHex) { mutableStateOf(TextFieldValue(initial, TextRange(initial.length))) }
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Outlined.Edit, contentDescription = null) },
+        title = { Text(stringResource(R.string.dialog_edit_title_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { value ->
+                        if (value.text.codePointCount(0, value.text.length) <= StoredCredential.MAX_LABEL_LENGTH) text = value
+                    },
+                    label = { Text(stringResource(R.string.dialog_edit_title_label)) },
+                    placeholder = { Text(credential.defaultTitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    singleLine = true,
+                    trailingIcon = if (text.text.isNotEmpty()) {
+                        {
+                            IconButton(onClick = { text = TextFieldValue("") }) {
+                                Icon(Icons.Outlined.Clear, contentDescription = stringResource(R.string.action_clear_text))
+                            }
+                        }
+                    } else {
+                        null
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester)
+                )
+                Text(
+                    text = stringResource(R.string.dialog_edit_title_help, credential.defaultTitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(StoredCredential.normalizeLabel(text.text)) }) {
+                Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        }
+    )
 }
 
 /** メタデータを読み込めない場合の案内と初期化ボタン。 */
@@ -199,8 +279,12 @@ private fun StorageUnavailableCard(error: String?, onInitialize: () -> Unit) {
     }
 }
 
+/**
+ * クレデンシャルのカード (DD-08 §3 SC-02)。1 行目はタイトル (編集可能)、2 行目以降は登録時の情報
+ * (rp.name・RP ID・ユーザー・作成日時・最終使用) と属性のチップ。
+ */
 @Composable
-private fun CredentialCard(credential: StoredCredential, onDelete: () -> Unit) {
+private fun CredentialCard(credential: StoredCredential, editable: Boolean, onEdit: () -> Unit, onDelete: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
             Icon(
@@ -212,13 +296,19 @@ private fun CredentialCard(credential: StoredCredential, onDelete: () -> Unit) {
             Spacer(modifier = Modifier.size(16.dp))
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    text = credential.rpName?.takeIf { it.isNotBlank() } ?: credential.rpId,
+                    text = credential.title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = credential.defaultTitle,
+                    style = MaterialTheme.typography.bodyMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (credential.rpName != null && credential.rpName != credential.rpId) {
+                if (credential.defaultTitle != credential.rpId) {
                     Text(credential.rpId, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 val userLine = listOfNotNull(credential.user.displayName, credential.user.name?.let { "($it)" })
@@ -292,12 +382,17 @@ private fun CredentialCard(credential: StoredCredential, onDelete: () -> Unit) {
                     )
                 }
             }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    Icons.Outlined.Delete,
-                    contentDescription = stringResource(R.string.action_delete),
-                    tint = MaterialTheme.colorScheme.error
-                )
+            Column {
+                IconButton(onClick = onEdit, enabled = editable) {
+                    Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.action_edit_credential_title))
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Outlined.Delete,
+                        contentDescription = stringResource(R.string.action_delete),
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
     }

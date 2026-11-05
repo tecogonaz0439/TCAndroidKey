@@ -175,7 +175,8 @@ class KeystoreCredentialStore(
             publicKeyY = y,
             securityLevel = securityLevelOf(keyPair.private),
             hmacSecret = options.hmacSecret,
-            credProtect = options.credProtect
+            credProtect = options.credProtect,
+            label = StoredCredential.normalizeLabel(options.label)
         )
         try {
             saveAndCommit(LinkedHashMap(cache).apply { put(credential.idHex, credential) })
@@ -310,6 +311,16 @@ class KeystoreCredentialStore(
         ensureLoaded()
         val current = cache[Hex.encode(id)] ?: return false
         val updated = current.copy(user = current.user.copy(name = user.name, displayName = user.displayName))
+        saveAndCommit(LinkedHashMap(cache).apply { put(updated.idHex, updated) })
+        return true
+    }
+
+    @Synchronized
+    override fun updateLabel(id: ByteArray, label: String?): Boolean {
+        ensureLoaded()
+        val current = cache[Hex.encode(id)] ?: return false
+        val updated = current.copy(label = StoredCredential.normalizeLabel(label))
+        if (updated == current) return true
         saveAndCommit(LinkedHashMap(cache).apply { put(updated.idHex, updated) })
         return true
     }

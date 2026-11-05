@@ -20,11 +20,11 @@ AI コーディングエージェント (Claude Code、Codex など) と開発�
 - 作業ブランチ: `main` (リポジトリの既定ブランチ。旧名 `claude/friendly-sagan-ipwxxv`)
 - 実装済み: CTAP 2.0 / 2.1 認証器、NFC / Bluetooth HID、Keystore 保管、認可ゲート、UI 一式、言語設定、利用規約・セキュリティポリシー表示、アイコン、
   PIN/UV Auth Protocol 1 / 2 (`fido.pin`)、hmac-secret・credProtect 拡張、内蔵 UV・PIN による pinUvAuthToken、credentialManagement、
-  clientPIN (PIN の設定・変更・照合。アプリでは状態の表示と消去)
+  clientPIN (PIN の設定・変更・照合。アプリでは状態の表示と消去)、クレデンシャルのタイトルの編集 (アプリ内の表示専用。上書き登録で引き継ぐ)
 - 外部レビュー (ChatGPT Pro、対象 `ecd6e49`) の指摘 29 件は精査・対応済み。判定と不採用の理由は [review/FIX_PLAN.md](review/FIX_PLAN.md)
-- 単体テスト 174 件 (fido-core 170、app 4) 全件成功、lint 指摘 0 件。python-fido2 による照合 (DD-10 CT-05、CT-07) 成功
+- 単体テスト 180 件 (fido-core 176、app 4) 全件成功、lint 指摘 0 件。python-fido2 による照合 (DD-10 CT-05、CT-07) 成功
 - **未実施**:
-  - 実機試験 ([DD-10](docs/design/detail/10_test-cases.md) の IT-01〜35、特に外部レビュー対応の IT-24〜32。hmac-secret・CTAP 2.1・clientPIN の CT-06・CT-08・CT-09、IT-36・IT-37)
+  - 実機試験 ([DD-10](docs/design/detail/10_test-cases.md) の IT-01〜35、特に外部レビュー対応の IT-24〜32。hmac-secret・CTAP 2.1・clientPIN の CT-06・CT-08・CT-09、IT-36・IT-37。タイトルの編集の IT-38)
   - 互換性マトリクスの記録 (DD-10 §4、[AP-C](docs/design/appendix/C_roadmap.md) F-01)
   - GitHub のリポジトリ名の変更 (所有者が手動で行う予定。文書・アプリ内の URL は新名称に変更済み)
 - 今後の課題の候補は [AP-C](docs/design/appendix/C_roadmap.md) §2 (NFC の待機、試験用の操作機能、互換性試験など)

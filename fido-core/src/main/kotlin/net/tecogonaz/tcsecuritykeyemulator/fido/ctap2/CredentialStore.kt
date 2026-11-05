@@ -30,6 +30,7 @@ enum class KeySecurityLevel { STRONGBOX, TEE, SOFTWARE, UNKNOWN }
  * @property publicKeyY P-256 公開鍵の Y 座標 (32 バイト)。
  * @property hmacSecret hmac-secret 拡張 (CredRandom) が有効か。
  * @property credProtect credProtect の保護レベル (1〜3。既定 1)。
+ * @property label 利用者が付けたタイトル (アプリ内の表示専用。CTAP の応答には使わない)。未設定は null で、[title] は [defaultTitle] になる。
  */
 data class StoredCredential(
     val id: ByteArray,
@@ -44,9 +45,16 @@ data class StoredCredential(
     val publicKeyY: ByteArray,
     val securityLevel: KeySecurityLevel,
     val hmacSecret: Boolean = false,
-    val credProtect: Int = CredProtect.USER_VERIFICATION_OPTIONAL
+    val credProtect: Int = CredProtect.USER_VERIFICATION_OPTIONAL,
+    val label: String? = null
 ) {
     val idHex: String get() = Hex.encode(id)
+
+    /** 既定のタイトル: 登録時の rp.name (空でなければ)、なければ RP ID。 */
+    val defaultTitle: String get() = rpName?.takeIf { it.isNotBlank() } ?: rpId
+
+    /** 表示するタイトル: [label] (空でなければ)、なければ [defaultTitle]。 */
+    val title: String get() = label?.takeIf { it.isNotBlank() } ?: defaultTitle
 
     /** 同じ credential (ID が同じ) か。内容 (署名カウンタ等) の違いは問わない。 */
     fun isSameCredential(other: StoredCredential): Boolean = id.contentEquals(other.id)
@@ -61,11 +69,26 @@ data class StoredCredential(
         lastUsedAtMillis == other.lastUsedAtMillis && signCount == other.signCount &&
         publicKeyX.contentEquals(other.publicKeyX) && publicKeyY.contentEquals(other.publicKeyY) &&
         securityLevel == other.securityLevel && hmacSecret == other.hmacSecret &&
-        credProtect == other.credProtect
+        credProtect == other.credProtect && label == other.label
 
     override fun hashCode(): Int = id.contentHashCode()
 
     companion object {
+        /** タイトルの最大長 (Unicode のコードポイント数)。 */
+        const val MAX_LABEL_LENGTH: Int = 64
+
+        /**
+         * 入力されたタイトルを保存用に正規化する: 前後の空白と改行・制御文字を除き、[MAX_LABEL_LENGTH] コードポイントで切る。
+         * 空になった場合は null (既定のタイトルに戻す)。
+         */
+        fun normalizeLabel(input: String?): String? {
+            if (input == null) return null
+            val cleaned = input.map { if (Character.isISOControl(it)) ' ' else it }.joinToString("").trim()
+            if (cleaned.isEmpty()) return null
+            if (cleaned.codePointCount(0, cleaned.length) <= MAX_LABEL_LENGTH) return cleaned
+            return cleaned.substring(0, cleaned.offsetByCodePoints(0, MAX_LABEL_LENGTH)).trimEnd()
+        }
+
         /** 新しい credential の作成日時: 現在時刻と、既存の最大値 + 1 の大きい方 (時計が巻き戻っても単調に増える)。 */
         fun nextCreatedAt(nowMillis: Long, existing: Collection<StoredCredential>): Long {
             val latest = existing.maxOfOrNull { it.createdAtMillis } ?: return nowMillis
@@ -86,10 +109,12 @@ data class StoredCredential(
  *
  * @property hmacSecret hmac-secret 拡張用の CredRandom を作る (DD-01 §11)。
  * @property credProtect credProtect の保護レベル (DD-01 §12.3)。
+ * @property label 新しい credential のタイトル (上書き登録で旧 credential から引き継ぐ。DD-01 §3.2 手順 13)。
  */
 data class CredentialOptions(
     val hmacSecret: Boolean = false,
-    val credProtect: Int = CredProtect.USER_VERIFICATION_OPTIONAL
+    val credProtect: Int = CredProtect.USER_VERIFICATION_OPTIONAL,
+    val label: String? = null
 )
 
 /**
@@ -139,6 +164,12 @@ interface CredentialStore {
      * user.id は変えない。該当する credential がなければ false。
      */
     fun updateUser(id: ByteArray, user: UserEntity): Boolean
+
+    /**
+     * credential のタイトルを [label] に置き換える (アプリの画面からの編集。null は既定のタイトルに戻す)。
+     * [label] は [StoredCredential.normalizeLabel] で正規化して保存する。該当する credential がなければ false。
+     */
+    fun updateLabel(id: ByteArray, label: String?): Boolean
 
     fun delete(id: ByteArray): Boolean
     fun deleteAll()

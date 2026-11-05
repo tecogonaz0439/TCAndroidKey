@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-01 |
-| 版数 | 1.6 |
+| 版数 | 1.7 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.7 (2026-11-05): 上書き登録でクレデンシャルのタイトル (FR-27) を引き継ぐ (§3.2 手順 9・13) |
 | 改訂 | 1.6 (2026-11-05): コードレビュー (2026-11-05) の指摘への対応。トークンを全トランスポートで失効 (§12.1)、credentialManagement の認証対象を受信バイト列に (§12.4)、getPINRetries の pinUvAuthProtocol を省略可 (§11.1、§13.2)、Protocol 1 の長いパディング (§13.4)、上書き登録の作成日時 (§3.2)、getUVRetries の不採用の理由 (§13.5) |
 | 改訂 | 1.5 (2026-11-05): clientPIN (PIN の設定・変更・照合、PIN によるトークンの発行) を追加 (§2、§3.3、§6、§8、§11.1、§12.5、§13) |
 | 改訂 | 1.4 (2026-11-05): CTAP 2.1 (pinUvAuthToken、credProtect、authenticatorCredentialManagement) を追加 (§1、§2、§3、§4、§6、§8、§11.1、§12) |
@@ -130,11 +131,11 @@ Android 実装の判定内容と Lease の寿命は DD-05 §2 を参照。
 | 6 | options の `up: false` | `0x2C INVALID_OPTION` |
 | 7 | pinUvAuthParam の確認 (§3.3。トークンは mc 権限) | `0x35` / `0x33` / `0x14` / `0x02` |
 | 8 | 認可 (UP 必須、UV = options.uv) | `Denied` のステータス |
-| 9 | 有効性の確認 → 鍵ペア生成・メタデータ保存 (`CredentialStore.create`)。`hmac-secret: true` なら CredRandom も作る | 失効 `0x27`、生成失敗 `0x27 OPERATION_DENIED` |
+| 9 | 有効性の確認 → 鍵ペア生成・メタデータ保存 (`CredentialStore.create`)。`hmac-secret: true` なら CredRandom も作る。`rk: true` なら、同一 RP・同一 `user.id` の discoverable credential のうち最も新しいもののタイトル (`label`、DD-06 §2) を新しい credential に付ける (読み込めない場合は付けない) | 失効 `0x27`、生成失敗 `0x27 OPERATION_DENIED` |
 | 10 | authenticatorData (§7) を作成。フラグ UP・AT、認可で UV 済みまたは pinUvAuthParam を検証済みなら UV。要求された拡張 (`credProtect`・`hmac-secret`) の出力があれば ED と拡張 | |
 | 11 | 有効性の確認 → アテステーション作成 (§3.4) | 署名不可 `0x27` |
 | 12 | 有効性の確認 (応答の直前) | 失効 `0x27` |
-| 13 | `rk: true` なら、同一 RP・同一 `user.id` で新しい credential より前に作成された discoverable credential を削除 (上書き登録)。作成日時はストアが既存のどの credential より大きくする (時計の巻き戻しの影響を受けない)。作成日時で絞るのは、同時に進んだ 2 つの上書き登録で、先に完了した側が後から作られた credential を消さないため | 削除の失敗は無視 (旧 credential が残るだけ) |
+| 13 | `rk: true` なら、同一 RP・同一 `user.id` で新しい credential より前に作成された discoverable credential を削除 (上書き登録。タイトルは手順 9 で引き継ぎ済み)。作成日時はストアが既存のどの credential より大きくする (時計の巻き戻しの影響を受けない)。作成日時で絞るのは、同時に進んだ 2 つの上書き登録で、先に完了した側が後から作られた credential を消さないため | 削除の失敗は無視 (旧 credential が残るだけ) |
 | 13a | pinUvAuthParam を使った場合は、トークンの UV フラグと権限を消す (§12.2) | |
 | 14 | `lease.complete(consumed = 成功)`。応答を返さなかった場合は、手順 9 で作成した credential を削除する | |
 

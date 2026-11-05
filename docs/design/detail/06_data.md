@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-06 |
-| 版数 | 1.7 |
+| 版数 | 1.8 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.8 (2026-11-05): `label` 項目 (クレデンシャルのタイトル、FR-27) を追加 |
 | 改訂 | 1.7 (2026-11-05): コードレビュー (2026-11-05) の指摘への対応 (重複の整理)。暗号化ファイルの処理を `KeystoreEncryptedFile` に共通化 (形式は変更なし) |
 | 改訂 | 1.6 (2026-11-05): コードレビュー (2026-11-05) の指摘への対応 (作成日時の単調性) |
 | 改訂 | 1.5 (2026-11-05): clientPIN の保存 (`pin.bin`、§3.4) を追加。§5 に `fido_hmac_`・PIN の暗号鍵を追加し、全削除でメタデータ暗号鍵も削除する記述に訂正 |
@@ -50,11 +51,14 @@ root / file / database / sharedpref / external をすべて除外。
 | `securityLevel` | KeySecurityLevel | 鍵生成時の Keystore セキュリティレベル |
 | `hmacSecret` | Boolean | hmac-secret 拡張付きで登録されたか (HMAC 鍵がある)。既定 false |
 | `credProtect` | Int | credProtect の保護レベル (1〜3。DD-01 §12.3)。既定 1 |
+| `label` | String? | 利用者が付けたタイトル (FR-27)。null は未設定。保存時に `normalizeLabel` で前後の空白・制御文字を除き、64 コードポイントまでにする (空は null)。アプリ内の表示専用で、CTAP の応答 (credentialManagement の列挙を含む) には使わない |
 
 - non-discoverable credential も鍵は端末内に保存する (credential ID に鍵をラップしない。Keystore の鍵は外部に出せないため)。
 - 同一 RP・同一ユーザー ID の discoverable credential は 1 件のみ (再登録で置き換え。旧 credential は新しい登録の完成後に削除する)。
 - 等価性 (`equals`) は全フィールドの内容で判定する (署名カウンタ・最終使用日時の更新が StateFlow で UI に通知されるようにするため)。
   同じ credential かどうかは `isSameCredential` (ID の比較) で判定する。
+- 表示するタイトル `title` は `label`、なければ `defaultTitle` (rp.name が空でなければ rp.name、なければ RP ID)。
+  上書き登録では旧 credential の `label` を引き継ぐ (DD-01 §3.2 手順 9)。credentialManagement の updateUserInformation では変わらない。
 - discoverable credential の順序は作成日時の新しい順 (`NEWEST_FIRST`、同時刻は ID 順)。最終使用日時は順序に影響しない。
 
 ## 3. 暗号化メタデータファイル
@@ -90,15 +94,16 @@ root / file / database / sharedpref / external をすべて除外。
     "y": "<hex 64 文字>",
     "securityLevel": "STRONGBOX",
     "hmacSecret": true,
-    "credProtect": 2
+    "credProtect": 2,
+    "label": "Alice (work)"
   }
 ]
 ```
 
 省略可能な項目 (`rpName`, `userName`, `userDisplayName`, `lastUsedAt`) は null の場合キー自体を出力しない。
-`hmacSecret` は true の場合のみ、`credProtect` は 1 以外の場合のみ出力し、ない場合は既定値 (false / 1) として読む
+`hmacSecret` は true の場合のみ、`credProtect` は 1 以外の場合のみ、`label` は設定した場合のみ出力し、ない場合は既定値 (false / 1 / 未設定) として読む
 (これらの項目を追加する前のファイルもそのまま読める)。
-`user.name`・`user.displayName` は credentialManagement の updateUserInformation で置き換わる (DD-01 §12.4)。
+`user.name`・`user.displayName` は credentialManagement の updateUserInformation で置き換わる (DD-01 §12.4)。`label` は SC-02 のタイトルの編集 (`CredentialStore.updateLabel`、DD-08 §3) で置き換わる。
 
 ### 3.3 整合性
 

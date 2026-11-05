@@ -82,6 +82,20 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    /** クレデンシャルのタイトルを変える (null・空は既定のタイトルに戻す)。本人確認は不要 (表示のみの変更)。 */
+    fun updateCredentialLabel(credential: StoredCredential, label: String?) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { container.credentialStore.updateLabel(credential.id, label) }
+                .onSuccess {
+                    container.eventLog.log(
+                        LogLevel.INFO, "Keystore", "renamed credential for ${credential.rpId}",
+                        logcatMessage = "renamed a credential"
+                    )
+                }
+                .onFailure { container.eventLog.log(LogLevel.ERROR, "Keystore", "failed to rename credential: ${it.message}") }
+        }
+    }
+
     /** 全削除 (PIN も消す。OS からのリセットと同じ扱い)。メタデータを読み込めない状態からの初期化にも使う。 */
     fun deleteAllCredentials() {
         viewModelScope.launch(Dispatchers.IO) {

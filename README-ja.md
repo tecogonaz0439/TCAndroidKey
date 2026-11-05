@@ -15,7 +15,7 @@
 ## 機能
 
 - **NFC による FIDO2 セキュリティキー** — ホストカードエミュレーション (HCE) で FIDO アプレットとして動作。CTAP 2.0 / 2.1 の MakeCredential、GetAssertion、GetNextAssertion、GetInfo、ClientPIN (鍵交換と内蔵 UV によるトークンの発行)、CredentialManagement、Selection、Reset (任意) に対応
-- **パスキーと非検出クレデンシャル** — ES256 (ECDSA P-256)、1 サイトに複数アカウント、アテステーションは `none` または packed の自己アテステーション
+- **パスキーと非検出クレデンシャル** — ES256 (ECDSA P-256)、1 サイトに複数アカウント、アテステーションは `none` または packed の自己アテステーション。アプリ内で各クレデンシャルにタイトル (サイト名・アカウント名など) を付けられる
 - **内蔵 UV と clientPIN による CTAP 2.1** — クライアントは端末での本人確認、または OS・ブラウザから設定した PIN で pinUvAuthToken を得る。credProtect の保護レベルと、クライアントからの資格情報の管理 (列挙・名前の変更・削除) に対応。アプリでは PIN の状態を表示し、本人確認のうえで PIN を消去できる
 - **hmac-secret 拡張** — WebAuthn の PRF 拡張の基盤となる CTAP の拡張。credential ごとの秘密値は Android Keystore の HMAC 鍵から導出
 - **Android Keystore 内の鍵** — 登録ごとに StrongBox (または TEE) 内で秘密鍵を生成し、端末外へ出さない。個別削除・全削除に対応

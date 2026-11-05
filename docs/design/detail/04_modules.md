@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-04 |
-| 版数 | 1.7 |
+| 版数 | 1.8 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.8 (2026-11-05): `CredentialStore.updateLabel`、`StoredCredential.label`・`title`・`normalizeLabel`、`CredentialOptions.label` を追加 (FR-27) |
 | 改訂 | 1.7 (2026-11-05): コードレビュー (2026-11-05) の指摘への対応 (重複の整理)。`CtapParams` (CTAP パラメータの共通の取得)、`KeystoreEncryptedFile` (暗号化ファイルの共通処理) を追加 |
 | 改訂 | 1.6 (2026-11-05): コードレビュー (2026-11-05) の指摘への対応 (`Cbor.rawMapValues`、`PinStore.revision`、`StoredCredential.nextCreatedAt`) |
 | 改訂 | 1.5 (2026-11-05): `PinStore`・`InMemoryPinStore`・`KeystorePinStore`、`ClientPin` の PIN 関連サブコマンドを追加 |
@@ -34,6 +35,7 @@ classDiagram
         +incrementSignCount(credential) Long
         +list() List
         +updateUser(id, user) Boolean
+        +updateLabel(id, label) Boolean
         +delete(id) Boolean
         +deleteAll()
     }
@@ -116,8 +118,8 @@ classDiagram
 | クラス | 責務 |
 |---|---|
 | `Ctap2Authenticator` | CTAP2 コマンド処理 (DD-01)。1 トランスポートに 1 インスタンス (GetNextAssertion 状態を保持)。`process` は `@Synchronized`、`resetSession` はブロックしない (`@Volatile`)。時計は wall clock (イベント) と単調時計 (GetNextAssertion) を注入できる |
-| `CredentialStore` | 鍵保管の抽象 (スレッドセーフであること)。`create(…, options)`、`credRandom(credential, userVerified)` (hmac-secret。CredRandom がなければ null)、`updateUser(id, user)` (credentialManagement) |
-| `CredentialOptions` | 登録時の属性 (`hmacSecret`、`credProtect`) |
+| `CredentialStore` | 鍵保管の抽象 (スレッドセーフであること)。`create(…, options)`、`credRandom(credential, userVerified)` (hmac-secret。CredRandom がなければ null)、`updateUser(id, user)` (credentialManagement)、`updateLabel(id, label)` (アプリでのタイトルの編集。null は既定に戻す) |
+| `CredentialOptions` | 登録時の属性 (`hmacSecret`、`credProtect`、`label` (上書き登録で引き継ぐタイトル)) |
 | `ClientPin` | authenticatorClientPIN (0x06。DD-01 §11.1、§13)、PIN の照合と連続の誤りの管理、プロトコルごとの `PinUvAuthProtocol` と pinUvAuthToken の状態 (DD-01 §12.1)。`verifyForOperation` (MC / GA)、`verifyForCredentialManagement`、`onUserPresentOperation` (使用後の権限の消去)、`isTokenInUse`、`reset()` (Reset 時)。時計とセッションの世代を注入する |
 | `PinStore` / `PinStatus` / `PinCheck` | clientPIN の保存の抽象 (DD-01 §13.1)。全トランスポートで共有するためスレッドセーフであること。`status`、`setPin`、`check` (回数を減らしてから照合)、`changePin`、`clear`、`revision` (設定・変更・消去で増える版。全トランスポートのトークンの失効に使う) |
 | `InMemoryPinStore` | メモリ上の `PinStore` (単体テスト・`Ctap2Authenticator` の既定値) |
@@ -125,7 +127,7 @@ classDiagram
 | `CredProtect` | credProtect 拡張 (DD-01 §12.3)。登録の要求の解釈と、認証での絞り込み |
 | `CtapParams.kt` (internal 拡張関数) | CTAP パラメータ (デコード済みのマップ) の取得。`requireLong` / `requireBytes` / `requireText` / `requireMap` / `requireList`、`optLong` / `optBytes` / `optText` / `optMap` / `optList` / `optBool`。欠落は `0x14`、型の不正は `0x11` に統一する。全コマンド・拡張で使う |
 | `HmacSecret` / `HmacSecretInput` | hmac-secret 拡張 (DD-01 §11.2)。登録の要求の判定、認証の入力の検証と salt の復号、出力の暗号化 |
-| `StoredCredential` | クレデンシャルのメタデータ (DD-06 §2。`hmacSecret`・`credProtect` を含む)。秘密鍵は含まない。等価性は全フィールドの内容 (StateFlow の更新を抑止しないため)。同一性は `isSameCredential`。並び順 `NEWEST_FIRST` (作成日時の新しい順、同時刻は ID 順)。`nextCreatedAt` (既存の最大値より大きい作成日時) |
+| `StoredCredential` | クレデンシャルのメタデータ (DD-06 §2。`hmacSecret`・`credProtect` を含む)。秘密鍵は含まない。等価性は全フィールドの内容 (StateFlow の更新を抑止しないため)。同一性は `isSameCredential`。並び順 `NEWEST_FIRST` (作成日時の新しい順、同時刻は ID 順)。`nextCreatedAt` (既存の最大値より大きい作成日時)。`title` (表示するタイトル: `label`、なければ `defaultTitle` = rp.name または RP ID)、`normalizeLabel` (保存用の正規化) |
 | `UserEntity` | `id` / `name` / `displayName` |
 | `KeySecurityLevel` | `STRONGBOX` / `TEE` / `SOFTWARE` / `UNKNOWN` |
 | `AuthorizationPolicy` / `AuthorizationRequest` / `AuthorizationResult` / `CtapOperation` | 認可の抽象 (DD-01 §1.4)。操作種別に `PIN_UV_AUTH_TOKEN`・`CREDENTIAL_MANAGEMENT` (ワンタイムを消費しない) を含む |
