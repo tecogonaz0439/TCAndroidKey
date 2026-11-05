@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-06 |
-| 版数 | 1.2 |
+| 版数 | 1.3 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.3 (2026-11-05): hmac-secret の HMAC 鍵と `hmacSecret` 項目を追加 |
 | 改訂 | 1.2 (2026-11-02): 設定 `notice_acknowledged` を追加、言語の保存先を明記 |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応 (等価性・順序、読み込み失敗の扱い、logcat 出力、巻き戻しの非検出)。`review/FIX_PLAN.md` |
 | 実装 | `fido-core/.../ctap2/CredentialStore.kt`, `app/.../keystore/MetadataStore.kt`, `data/SettingsRepository.kt`, `data/EventLogRepository.kt` |
@@ -15,6 +16,7 @@
 | データ | 保存先 | 形式 | 永続 | バックアップ |
 |---|---|---|---|---|
 | 秘密鍵 (クレデンシャル毎) | Android Keystore | EC P-256 鍵エントリ | ○ | 対象外 |
+| hmac-secret の HMAC 鍵 (hmac-secret 付きのクレデンシャル毎) | Android Keystore | HMAC-SHA256 鍵エントリ | ○ | 対象外 |
 | メタデータ暗号鍵 | Android Keystore | AES-256 鍵エントリ | ○ | 対象外 |
 | クレデンシャルのメタデータ | `filesDir/credentials.bin` | AES-GCM 暗号化 JSON | ○ | 対象外 |
 | 設定 | SharedPreferences `settings` | キー・値 | ○ | 対象外 |
@@ -40,6 +42,7 @@ root / file / database / sharedpref / external をすべて除外。
 | `signCount` | Long | 署名カウンタ (作成時 0、署名毎 +1) |
 | `publicKeyX` / `publicKeyY` | ByteArray (32) | 公開鍵座標 |
 | `securityLevel` | KeySecurityLevel | 鍵生成時の Keystore セキュリティレベル |
+| `hmacSecret` | Boolean | hmac-secret 拡張付きで登録されたか (HMAC 鍵がある)。既定 false |
 
 - non-discoverable credential も鍵は端末内に保存する (credential ID に鍵をラップしない。Keystore の鍵は外部に出せないため)。
 - 同一 RP・同一ユーザー ID の discoverable credential は 1 件のみ (再登録で置き換え。旧 credential は新しい登録の完成後に削除する)。
@@ -77,12 +80,14 @@ root / file / database / sharedpref / external をすべて除外。
     "signCount": 3,
     "x": "<hex 64 文字>",
     "y": "<hex 64 文字>",
-    "securityLevel": "STRONGBOX"
+    "securityLevel": "STRONGBOX",
+    "hmacSecret": true
   }
 ]
 ```
 
 省略可能な項目 (`rpName`, `userName`, `userDisplayName`, `lastUsedAt`) は null の場合キー自体を出力しない。
+`hmacSecret` は true の場合のみ出力し、ない場合は false として読む (この項目を追加する前のファイルもそのまま読める)。
 
 ### 3.3 整合性
 

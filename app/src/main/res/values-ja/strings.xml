@@ -73,6 +73,7 @@
     <string name="credential_never_used">未使用</string>
     <string name="credential_discoverable">パスキー (検出可能)</string>
     <string name="credential_non_discoverable">非検出 (サーバー側保持)</string>
+    <string name="credential_hmac_secret">hmac-secret (PRF)</string>
     <string name="security_level_strongbox">StrongBox</string>
     <string name="security_level_tee">TEE</string>
     <string name="security_level_software">ソフトウェア</string>

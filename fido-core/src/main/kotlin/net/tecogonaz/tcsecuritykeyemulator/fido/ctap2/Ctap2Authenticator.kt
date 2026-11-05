@@ -16,8 +16,9 @@ import java.security.MessageDigest
 /**
  * CTAP 2.0 認証器 (FIDO2 セキュリティキー) のコマンド処理本体。トランスポート (NFC / HID) には依存しない。
  *
- * 対応コマンド: GetInfo / MakeCredential / GetAssertion / GetNextAssertion / Reset / Selection。
- * 署名アルゴリズムは ES256 (P-256) のみ。clientPIN は未対応で、ユーザー検証は端末内蔵 UV
+ * 対応コマンド: GetInfo / MakeCredential / GetAssertion / GetNextAssertion / ClientPIN (getKeyAgreement のみ) /
+ * Reset / Selection。拡張は hmac-secret。
+ * 署名アルゴリズムは ES256 (P-256) のみ。PIN は未対応で、ユーザー検証は端末内蔵 UV
  * (生体認証・画面ロック資格情報) として [AuthorizationPolicy] に委譲する。
  *
  * 1 つのトランスポートにつき 1 インスタンスを使う (GetNextAssertion の状態を保持するため)。
@@ -50,12 +51,17 @@ class Ctap2Authenticator(
         /** 元の GetAssertion の取消トークン。切断・再同期で無効になる。 */
         val origin: KeepAlive,
         /** 元の GetAssertion を受信したチャネル (CTAPHID の CID。NFC は 0)。 */
-        val channel: Int
+        val channel: Int,
+        /** 元の GetAssertion の hmac-secret 入力 (各 credential の出力に使う)。 */
+        val hmacSecret: HmacSecretInput?
     )
 
     // resetSession() は UI スレッドから呼ばれることがあるため、モニターを使わず volatile で更新する。
     @Volatile
     private var pending: PendingAssertions? = null
+
+    /** PIN/UV Auth Protocol の状態 (鍵交換の鍵)。`process` の直列化の内側でのみ使う。 */
+    private val clientPin = ClientPin()
 
     /**
      * CTAP2 リクエスト (先頭 1 バイトがコマンド、以降が CBOR パラメータ) を処理し、
@@ -98,6 +104,7 @@ class Ctap2Authenticator(
                     getAssertion(p, keepAlive, channel)
                 }
                 CtapCommand.GET_NEXT_ASSERTION -> getNextAssertion(keepAlive, channel)
+                CtapCommand.CLIENT_PIN -> clientPin.process(params ?: throw CtapException(CtapStatus.ERR_MISSING_PARAMETER))
                 CtapCommand.RESET -> reset(keepAlive)
                 CtapCommand.SELECTION -> selection(keepAlive)
                 else -> throw CtapException(CtapStatus.ERR_INVALID_COMMAND)
@@ -132,6 +139,7 @@ class Ctap2Authenticator(
         val config = configProvider()
         return linkedMapOf(
             0x01L to listOf("FIDO_2_0"),
+            0x02L to listOf(HmacSecret.ID),
             0x03L to config.aaguid,
             0x04L to linkedMapOf(
                 "rk" to true,
@@ -140,6 +148,7 @@ class Ctap2Authenticator(
                 "plat" to false
             ),
             0x05L to config.maxMessageSize.toLong(),
+            0x06L to clientPin.supportedProtocols.map { it.toLong() },
             0x09L to config.transports,
             0x0AL to listOf(linkedMapOf("alg" to CoseAlgorithm.ES256, "type" to "public-key"))
         )
@@ -170,7 +179,8 @@ class Ctap2Authenticator(
         }
 
         val excludeIds = credentialIds(p.optList(5))
-        p.optMap(6) // extensions: 未対応だが map であることは検証する (中身の未知の拡張は無視)
+        // extensions: map であることを検証し、未知の拡張は無視する
+        val hmacSecret = HmacSecret.requested(p.optMap(6))
         val options = p.optMap(7)
         val rk = options.option("rk") ?: false
         val uv = options.option("uv") ?: false
@@ -199,9 +209,13 @@ class Ctap2Authenticator(
             ensureActive(grant.lease, keepAlive)
             // 上書き登録 (同一 RP・同一 user.id の discoverable) でも、旧 credential は新しい登録が
             // 完成してから削除する (新規作成の失敗で既存の鍵を失わない)。
-            val credential = store.create(rpId, rpName, user, rk).also { created = it }
-            val flags = AuthDataFlags.UP or AuthDataFlags.AT or (if (grant.userVerified) AuthDataFlags.UV else 0)
-            val authData = buildAuthData(rpIdHash(rpId), flags, credential.signCount) {
+            val credential = store.create(rpId, rpName, user, rk, CredentialOptions(hmacSecret = hmacSecret))
+                .also { created = it }
+            // 拡張の出力は要求された拡張のみ (CTAP 2.1 §6.1.2 手順 15)
+            val extensions = if (hmacSecret) linkedMapOf<String, Any>(HmacSecret.ID to credential.hmacSecret) else null
+            val flags = AuthDataFlags.UP or AuthDataFlags.AT or (if (grant.userVerified) AuthDataFlags.UV else 0) or
+                (if (extensions != null) AuthDataFlags.ED else 0)
+            val authData = buildAuthData(rpIdHash(rpId), flags, credential.signCount, extensions) {
                 it.write(config.aaguid)
                 it.write((credential.id.size ushr 8) and 0xFF)
                 it.write(credential.id.size and 0xFF)
@@ -212,11 +226,7 @@ class Ctap2Authenticator(
                 AttestationMode.NONE -> "none" to emptyMap<String, Any>()
                 AttestationMode.SELF -> {
                     ensureActive(grant.lease, keepAlive)
-                    val sig = try {
-                        store.sign(credential, authData + clientDataHash)
-                    } catch (e: KeyUseNotAuthorizedException) {
-                        throw CtapException(CtapStatus.ERR_OPERATION_DENIED, e.message ?: "key use not authorized")
-                    }
+                    val sig = keyUse { store.sign(credential, authData + clientDataHash) }
                     "packed" to linkedMapOf("alg" to CoseAlgorithm.ES256, "sig" to sig)
                 }
             }
@@ -242,13 +252,16 @@ class Ctap2Authenticator(
         val rawAllowList = p.optList(3)
         val restrictToAllowList = !rawAllowList.isNullOrEmpty()
         val allowIds = credentialIds(rawAllowList)
-        p.optMap(4) // extensions: 型のみ検証
+        val extensions = p.optMap(4)
         val options = p.optMap(5)
         if (options.option("rk") != null) throw CtapException(CtapStatus.ERR_INVALID_OPTION)
         val up = options.option("up") ?: true
         val uv = options.option("uv") ?: false
         val pinAuth = p.optBytes(6)
         p.optInt(7) // pinProtocol: 型のみ検証
+        // hmac-secret は UP を伴う認証でのみ使える (CTAP 2.1 §12.5)。入力の検証・salt の復号は認可の前に行う。
+        if (HmacSecret.present(extensions) && !up) throw CtapException(CtapStatus.ERR_UNSUPPORTED_OPTION)
+        val hmacSecret = HmacSecret.parse(extensions, clientPin)
 
         val request = AuthorizationRequest(CtapOperation.GET_ASSERTION, rpId, null, up, uv)
         checkPinAuth(pinAuth, request, keepAlive)
@@ -278,13 +291,14 @@ class Ctap2Authenticator(
 
             val first = credentials.first()
             val response = assertionResponse(
-                first, rpIdHash, clientDataHash, flags, userVerified, !restrictToAllowList, grant.lease, keepAlive
+                first, rpIdHash, clientDataHash, flags, userVerified, !restrictToAllowList, grant.lease, keepAlive,
+                hmacSecret
             )
             if (!restrictToAllowList && credentials.size > 1) {
                 response[5L] = credentials.size.toLong()
                 pending = PendingAssertions(
                     credentials, 1, rpIdHash, clientDataHash, flags, userVerified, monotonicClock(),
-                    lease = grant.lease, origin = keepAlive, channel = channel
+                    lease = grant.lease, origin = keepAlive, channel = channel, hmacSecret = hmacSecret
                 )
             }
             success = true
@@ -312,7 +326,7 @@ class Ctap2Authenticator(
         val credential = state.credentials[state.nextIndex]
         val response = assertionResponse(
             credential, state.rpIdHash, state.clientDataHash, state.flags, state.userVerified, true,
-            state.lease, keepAlive
+            state.lease, keepAlive, state.hmacSecret
         )
         // 署名に成功してから位置とタイマーを進める。
         state.nextIndex++
@@ -329,16 +343,20 @@ class Ctap2Authenticator(
         userVerified: Boolean,
         includeUser: Boolean,
         lease: AuthorizationLease,
-        keepAlive: KeepAlive
+        keepAlive: KeepAlive,
+        hmacSecret: HmacSecretInput?
     ): MutableMap<Long, Any> {
         ensureActive(lease, keepAlive)
         val counter = store.incrementSignCount(credential)
-        val authData = buildAuthData(rpIdHash, flags, counter) {}
-        val signature = try {
-            store.sign(credential, authData + clientDataHash)
-        } catch (e: KeyUseNotAuthorizedException) {
-            throw CtapException(CtapStatus.ERR_OPERATION_DENIED, e.message ?: "key use not authorized")
+        // CredRandom は応答の UV フラグに対応するものを使う。CredRandom のない credential では拡張を無視する。
+        val hmacOutput = hmacSecret?.let { input ->
+            keyUse { store.credRandom(credential, userVerified) }?.let { HmacSecret.output(input, it) }
         }
+        val extensions = hmacOutput?.let { linkedMapOf<String, Any>(HmacSecret.ID to it) }
+        val authData = buildAuthData(
+            rpIdHash, flags or (if (extensions != null) AuthDataFlags.ED else 0), counter, extensions
+        ) {}
+        val signature = keyUse { store.sign(credential, authData + clientDataHash) }
         // 応答を返す直前にも確認する (停止後に署名を送出しない)。
         ensureActive(lease, keepAlive)
         val response = linkedMapOf<Long, Any>(
@@ -367,6 +385,7 @@ class Ctap2Authenticator(
         try {
             ensureActive(grant.lease, keepAlive)
             store.deleteAll()
+            clientPin.regenerate()
             success = true
         } finally {
             grant.lease.complete(consumed = success)
@@ -420,10 +439,19 @@ class Ctap2Authenticator(
         throw CtapException(CtapStatus.ERR_PIN_AUTH_INVALID)
     }
 
+    /** 鍵の使用不可 (Keystore の認証期限切れ等) を `0x27` に変換する。 */
+    private inline fun <T> keyUse(block: () -> T): T = try {
+        block()
+    } catch (e: KeyUseNotAuthorizedException) {
+        throw CtapException(CtapStatus.ERR_OPERATION_DENIED, e.message ?: "key use not authorized")
+    }
+
+    /** authenticatorData を作る。[extensions] は ED フラグを立てた場合に末尾へ CBOR で付ける。 */
     private fun buildAuthData(
         rpIdHash: ByteArray,
         flags: Int,
         signCount: Long,
+        extensions: Map<String, Any>?,
         attested: (ByteArrayOutputStream) -> Unit
     ): ByteArray {
         val out = ByteArrayOutputStream()
@@ -432,6 +460,7 @@ class Ctap2Authenticator(
         out.write(flags)
         for (i in 3 downTo 0) out.write(((signCount ushr (8 * i)) and 0xFF).toInt())
         if (hasAttested) attested(out)
+        if ((flags and AuthDataFlags.ED) != 0) out.write(Cbor.encode(extensions ?: emptyMap<String, Any>()))
         return out.toByteArray()
     }
 

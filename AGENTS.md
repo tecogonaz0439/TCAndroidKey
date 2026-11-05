@@ -18,21 +18,26 @@ AI コーディングエージェント (Claude Code、Codex など) と開発�
 ## 2. 現在の状態 (2026-11-05 時点)
 
 - 作業ブランチ: `main` (リポジトリの既定ブランチ。旧名 `claude/friendly-sagan-ipwxxv`)
-- 実装済み: CTAP 2.0 認証器、NFC / Bluetooth HID、Keystore 保管、認可ゲート、UI 一式、言語設定、利用規約・セキュリティポリシー表示、アイコン
+- 実装済み: CTAP 2.0 認証器、NFC / Bluetooth HID、Keystore 保管、認可ゲート、UI 一式、言語設定、利用規約・セキュリティポリシー表示、アイコン、
+  PIN/UV Auth Protocol 1 / 2 (`fido.pin`)、hmac-secret 拡張 (ClientPIN は getKeyAgreement のみ)
 - 外部レビュー (ChatGPT Pro、対象 `ecd6e49`) の指摘 29 件は精査・対応済み。判定と不採用の理由は [review/FIX_PLAN.md](review/FIX_PLAN.md)
-- 単体テスト 122 件 (fido-core 118、app 4) 全件成功、lint 指摘 0 件
+- 単体テスト 131 件 (fido-core 127、app 4) 全件成功、lint 指摘 0 件
 - **未実施**:
-  - 実機試験 ([DD-10](docs/design/detail/10_test-cases.md) の IT-01〜35、特に外部レビュー対応の IT-24〜32)
+  - 実機試験 ([DD-10](docs/design/detail/10_test-cases.md) の IT-01〜35、特に外部レビュー対応の IT-24〜32。hmac-secret の CT-06)
   - 互換性マトリクスの記録 (DD-10 §4、[AP-C](docs/design/appendix/C_roadmap.md) F-01)
   - GitHub のリポジトリ名の変更 (所有者が手動で行う予定。文書・アプリ内の URL は新名称に変更済み)
-- 今後の課題の候補は [AP-C](docs/design/appendix/C_roadmap.md) §2 (clientPIN、CTAP 2.1、hmac-secret、試験用の操作機能など)
+- 進行中: [AP-C](docs/design/appendix/C_roadmap.md) の F-03 (CTAP 2.1: pinUvAuthToken・credProtect・credentialManagement) → F-02 (clientPIN)。
+  手順ごとに main へコミットする
+- 今後の課題の候補は [AP-C](docs/design/appendix/C_roadmap.md) §2 (clientPIN、CTAP 2.1、試験用の操作機能など)
 
 ## 3. リポジトリ構成
 
 ```
 fido-core/   FIDO2 プロトコル (Android 非依存の純 Kotlin/JVM)。JVM の単体テストで検証する
   cbor/      CTAP2 canonical CBOR
-  ctap2/     Ctap2Authenticator (コマンド処理)、CredentialStore / AuthorizationPolicy / AuthorizationLease / KeepAlive
+  ctap2/     Ctap2Authenticator (コマンド処理)、CredentialStore / AuthorizationPolicy / AuthorizationLease / KeepAlive、
+             ClientPin (0x06)、HmacSecret (拡張)
+  pin/       PIN/UV Auth Protocol 1 / 2 (ECDH・HKDF・AES-CBC・HMAC)
   nfc/       ISO 7816-4 APDU (NfcCtapProcessor)
   hid/       CTAPHID (CtapHidProcessor)
   session/   AuthorizationGate (全トランスポート共有の認可判定)
@@ -85,13 +90,15 @@ review/      外部レビューの依頼文と対応記録 (履歴として旧�
 
 ### 5.2 識別子 (変えると既存の端末で鍵が使えなくなる)
 
-- applicationId / パッケージ `net.tecogonaz.tcsecuritykeyemulator`、Keystore のエイリアス (`fido_cred_<id>`、`tcsecuritykeyemulator_metadata_v1`)、
+- applicationId / パッケージ `net.tecogonaz.tcsecuritykeyemulator`、Keystore のエイリアス (`fido_cred_<id>`、`fido_hmac_<id>`、`tcsecuritykeyemulator_metadata_v1`)、
   SharedPreferences 名 (`settings`) と各キー、AAGUID (`523283ca-3c2c-48b5-8bff-a722f900e190`) は変更しない。
 - `app/debug.keystore` は上書き更新のために意図的に公開・管理している (残存リスク R-06)。release 用の鍵は Git に入れない。
 
 ### 5.3 プロトコル
 
-- CTAP 2.0 (`FIDO_2_0`) のみ、ES256 のみ、clientPIN なし (内蔵 UV)。GetInfo に未対応の機能 (pinUvAuthProtocols 等) を広告しない。
+- CTAP 2.0 (`FIDO_2_0`) のみ、ES256 のみ、PIN なし (内蔵 UV)。拡張は hmac-secret のみ。ClientPIN は鍵交換の getKeyAgreement のみで、
+  pinProtocols は `[1]`。GetInfo に未対応の機能 (clientPin 等) を広告しない。
+- メタデータの JSON に項目を足すときは任意項目とし、ない場合は既定値で読む (既存の端末の credentials.bin を読めるようにする)。
 - 外部レビューで「不採用」と判断した修正案 (MakeCredential の `up:true` 拒否、CBOR のキー順序検証、NFC P1/P2 の厳格検証、
   Bluetooth の transports 変更など) は、理由が [review/FIX_PLAN.md](review/FIX_PLAN.md) にある。蒸し返す場合は理由を確認する。
 

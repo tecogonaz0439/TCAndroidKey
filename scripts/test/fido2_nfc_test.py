@@ -21,6 +21,11 @@ CTAP2 の GetInfo → MakeCredential → GetAssertion を実行し、署名を�
     2. 端末をリーダーに載せた状態で実行する
          python3 scripts/test/fido2_nfc_test.py            # 全ステップ
          python3 scripts/test/fido2_nfc_test.py --info     # GetInfo のみ
+         python3 scripts/test/fido2_nfc_test.py --hmac-secret  # hmac-secret 拡張も確認する
+
+--hmac-secret の確認内容 (DD-10 CT-06):
+    - 登録の拡張出力が {"hmac-secret": true} であること
+    - 認証で salt 2 つの出力 (各 32 バイト) を復号でき、2 回目の認証で同じ値になること
 """
 import argparse
 import hashlib
@@ -32,6 +37,7 @@ try:
     import fido2
     from fido2.attestation import PackedAttestation
     from fido2.ctap2 import Ctap2
+    from fido2.ctap2.pin import PinProtocolV1
     from fido2.pcsc import CtapPcscDevice
 except ImportError:
     sys.exit('python-fido2 が必要です: python3 -m pip install "fido2[pcsc]==2.0.0"')
@@ -50,6 +56,32 @@ def find_device(timeout):
         time.sleep(0.5)
 
 
+def hmac_secret_input(ctap, salts):
+    """clientPIN の getKeyAgreement で共有鍵を作り、hmac-secret の入力 (salt の暗号化と saltAuth) を作る。"""
+    protocol = PinProtocolV1()
+    resp = ctap.client_pin(protocol.VERSION, 0x02)
+    key_agreement, secret = protocol.encapsulate(resp[1])
+    salt_enc = protocol.encrypt(secret, salts)
+    ext = {1: key_agreement, 2: salt_enc, 3: protocol.authenticate(secret, salt_enc), 4: protocol.VERSION}
+    return {"hmac-secret": ext}, lambda value: protocol.decrypt(secret, value)
+
+
+def assert_hmac_secret(ctap, cred, salts):
+    cdh = hashlib.sha256(b"prf-" + os.urandom(16)).digest()
+    extensions, decrypt = hmac_secret_input(ctap, salts)
+    assertion = ctap.get_assertion(RP_ID, cdh, extensions=extensions, options={"uv": True})
+    assertion.verify(cdh, cred.public_key)
+    encrypted = (assertion.auth_data.extensions or {}).get("hmac-secret")
+    if not encrypted:
+        sys.exit(f"  hmac-secret: no output (flags=0x{assertion.auth_data.flags:02x})")
+    output = decrypt(encrypted)
+    if len(output) != 64:
+        sys.exit(f"  hmac-secret: unexpected output length {len(output)}")
+    print(f"\n[GetAssertion + hmac-secret] flags=0x{assertion.auth_data.flags:02x} "
+          f"output1={output[:32].hex()[:16]}… output2={output[32:].hex()[:16]}…")
+    return output
+
+
 def wait_rearm(dev, prompt):
     input(f"\n{prompt}\n準備ができたら Enter (端末はリーダーから一度離して載せ直す) > ")
     return find_device(30)
@@ -58,6 +90,7 @@ def wait_rearm(dev, prompt):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--info", action="store_true", help="GetInfo のみ実行")
+    ap.add_argument("--hmac-secret", action="store_true", help="hmac-secret 拡張の登録・認証も確認する")
     ap.add_argument("--timeout", type=float, default=30)
     args = ap.parse_args()
 
@@ -69,6 +102,8 @@ def main():
     print(f"versions : {info.versions}")
     print(f"aaguid   : {info.aaguid}")
     print(f"options  : {info.options}")
+    print(f"extensions: {info.extensions}")
+    print(f"pinUvAuthProtocols: {info.pin_uv_protocols}")
     print(f"transports: {getattr(info, 'transports', None)}")
     if args.info:
         return
@@ -81,6 +116,7 @@ def main():
         {"id": RP_ID, "name": "Security Key Emulator test"},
         {"id": user_id, "name": "tester@example.com", "displayName": "Tester"},
         [{"type": "public-key", "alg": -7}],
+        extensions={"hmac-secret": True} if args.hmac_secret else None,
         options={"rk": True, "uv": True},
     )
     cred = att.auth_data.credential_data
@@ -99,6 +135,10 @@ def main():
         print("  attestation: none — structure OK (no signature to verify)")
     else:
         sys.exit(f"  unexpected attestation format: {att.fmt}")
+    if args.hmac_secret:
+        if att.auth_data.extensions != {"hmac-secret": True}:
+            sys.exit(f"  hmac-secret: unexpected registration output {att.auth_data.extensions!r}")
+        print("  hmac-secret: enabled")
 
     dev = wait_rearm(dev, "ワンタイム設定が ON の場合は、アプリで再度「本人確認して開始」を実行してください。")
     ctap = Ctap2(dev)
@@ -110,6 +150,16 @@ def main():
     print(f"\n[GetAssertion] flags=0x{assertion.auth_data.flags:02x} "
           f"counter={assertion.auth_data.counter} user={assertion.user}")
     print("  assertion signature: OK")
+
+    if args.hmac_secret:
+        salts = hashlib.sha256(b"salt1").digest() + hashlib.sha256(b"salt2").digest()
+        dev = wait_rearm(dev, "hmac-secret の 1 回目の認証を行います (ワンタイム ON の場合は再度本人確認)。")
+        first = assert_hmac_secret(Ctap2(dev), cred, salts)
+        dev = wait_rearm(dev, "hmac-secret の 2 回目の認証を行います (ワンタイム ON の場合は再度本人確認)。")
+        second = assert_hmac_secret(Ctap2(dev), cred, salts)
+        if first != second:
+            sys.exit("  hmac-secret: outputs differ between assertions (must be deterministic)")
+        print("  hmac-secret: outputs are deterministic — OK")
     print("\nすべて成功しました。アプリの「クレデンシャル」画面でテスト用の鍵を削除できます。")
 
 

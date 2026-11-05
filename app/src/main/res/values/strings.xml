@@ -75,6 +75,7 @@
     <string name="credential_never_used">Not used yet</string>
     <string name="credential_discoverable">Passkey (discoverable)</string>
     <string name="credential_non_discoverable">Non-discoverable</string>
+    <string name="credential_hmac_secret">hmac-secret (PRF)</string>
     <string name="security_level_strongbox">StrongBox</string>
     <string name="security_level_tee">TEE</string>
     <string name="security_level_software">Software</string>

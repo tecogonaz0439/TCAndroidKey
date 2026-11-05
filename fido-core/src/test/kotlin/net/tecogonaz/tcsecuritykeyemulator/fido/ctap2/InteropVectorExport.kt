@@ -52,7 +52,8 @@ class InteropVectorExport {
             "getAssertion" to Hex.encode(ga),
             "cdh2" to Hex.encode(cdh2),
             "getInfo" to Hex.encode(info),
-            "pinProtocols" to listOf(1L, 2L).map { pinProtocolVector(it) }
+            "pinProtocols" to listOf(1L, 2L).map { pinProtocolVector(it) },
+            "hmacSecret" to hmacSecretVector()
         )
         File(out!!).writeText(toJson(vectors))
     }
@@ -77,6 +78,63 @@ class InteropVectorExport {
             "ciphertext" to Hex.encode(protocol.encrypt(secret, plaintext)),
             "message" to Hex.encode(message),
             "hmac" to Hex.encode(protocol.authenticate(secret, message))
+        )
+    }
+
+    /**
+     * hmac-secret の往復 (登録 → salt 2 つで認証)。外部検証器は共有鍵を導出して出力を復号し、
+     * CredRandom (テスト用ストアから出力) と salt の HMAC に一致することを確認する。
+     */
+    private fun hmacSecretVector(): Map<String, Any> {
+        val store = InMemoryCredentialStore()
+        val auth = Ctap2Authenticator(
+            store, FakePolicy(), { AuthenticatorConfig(Hex.decode("523283ca3c2c48b58bffa722f900e190")) }, "interop"
+        )
+        val cdh = TestCrypto.sha256("hmac-secret".toByteArray())
+        val mc = auth.process(
+            byteArrayOf(CtapCommand.MAKE_CREDENTIAL.toByte()) + Cbor.encode(
+                linkedMapOf<Long, Any?>(
+                    1L to cdh,
+                    2L to linkedMapOf("id" to "tcsecuritykeyemulator.test"),
+                    3L to linkedMapOf("id" to byteArrayOf(9), "name" to "prf"),
+                    4L to listOf(linkedMapOf("alg" to -7L, "type" to "public-key")),
+                    6L to linkedMapOf("hmac-secret" to true),
+                    7L to linkedMapOf("rk" to true)
+                )
+            )
+        )
+        val keyAgreementResp = auth.process(
+            byteArrayOf(CtapCommand.CLIENT_PIN.toByte()) + Cbor.encode(linkedMapOf(1L to 1L, 2L to 2L))
+        )
+        val authKey = (Cbor.decode(keyAgreementResp, 1, keyAgreementResp.size - 1) as Map<*, *>)[1L] as Map<*, *>
+        val platform = TestPlatform(1)
+        val secret = platform.sharedSecret(authKey)
+        val salts = TestCrypto.sha256("salt1".toByteArray()) + TestCrypto.sha256("salt2".toByteArray())
+        val saltEnc = platform.encrypt(secret, salts)
+        val ga = auth.process(
+            byteArrayOf(CtapCommand.GET_ASSERTION.toByte()) + Cbor.encode(
+                linkedMapOf<Long, Any?>(
+                    1L to "tcsecuritykeyemulator.test",
+                    2L to cdh,
+                    4L to linkedMapOf(
+                        "hmac-secret" to linkedMapOf(
+                            1L to platform.keyAgreement, 2L to saltEnc, 3L to platform.authenticate(secret, saltEnc), 4L to 1L
+                        )
+                    ),
+                    5L to linkedMapOf("uv" to true)
+                )
+            )
+        )
+        val (withUv, _) = store.credRandoms(store.list().single())!!
+        return linkedMapOf(
+            "makeCredential" to Hex.encode(mc),
+            "getAssertion" to Hex.encode(ga),
+            "cdh" to Hex.encode(cdh),
+            "platformPrivateKey" to Hex.encode(platform.privateScalar),
+            "authenticatorKeyX" to Hex.encode(authKey[-2L] as ByteArray),
+            "authenticatorKeyY" to Hex.encode(authKey[-3L] as ByteArray),
+            "salts" to Hex.encode(salts),
+            "credRandomWithUv" to Hex.encode(withUv)
         )
     }
 

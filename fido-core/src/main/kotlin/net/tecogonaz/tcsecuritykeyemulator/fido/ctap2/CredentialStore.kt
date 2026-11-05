@@ -28,6 +28,7 @@ enum class KeySecurityLevel { STRONGBOX, TEE, SOFTWARE, UNKNOWN }
  * @property discoverable resident key (discoverable credential) かどうか。
  * @property publicKeyX P-256 公開鍵の X 座標 (32 バイト)。
  * @property publicKeyY P-256 公開鍵の Y 座標 (32 バイト)。
+ * @property hmacSecret hmac-secret 拡張 (CredRandom) が有効か。
  */
 data class StoredCredential(
     val id: ByteArray,
@@ -40,7 +41,8 @@ data class StoredCredential(
     val signCount: Long,
     val publicKeyX: ByteArray,
     val publicKeyY: ByteArray,
-    val securityLevel: KeySecurityLevel
+    val securityLevel: KeySecurityLevel,
+    val hmacSecret: Boolean = false
 ) {
     val idHex: String get() = Hex.encode(id)
 
@@ -56,7 +58,7 @@ data class StoredCredential(
         discoverable == other.discoverable && createdAtMillis == other.createdAtMillis &&
         lastUsedAtMillis == other.lastUsedAtMillis && signCount == other.signCount &&
         publicKeyX.contentEquals(other.publicKeyX) && publicKeyY.contentEquals(other.publicKeyY) &&
-        securityLevel == other.securityLevel
+        securityLevel == other.securityLevel && hmacSecret == other.hmacSecret
 
     override fun hashCode(): Int = id.contentHashCode()
 
@@ -71,14 +73,29 @@ data class StoredCredential(
 }
 
 /**
+ * 登録時に指定する credential の属性。
+ *
+ * @property hmacSecret hmac-secret 拡張用の CredRandom を作る (DD-01 §11)。
+ */
+data class CredentialOptions(
+    val hmacSecret: Boolean = false
+)
+
+/**
  * クレデンシャル (秘密鍵 + メタデータ) の保管庫。
  *
  * Android 実装では秘密鍵を Android Keystore (TEE / StrongBox) に生成し、外部へは一切取り出さない。
  * 実装はスレッドセーフであること。
  */
 interface CredentialStore {
-    /** 新しい ES256 鍵ペアを生成し、クレデンシャルとして保存する。 */
-    fun create(rpId: String, rpName: String?, user: UserEntity, discoverable: Boolean): StoredCredential
+    /** 新しい ES256 鍵ペア (と [options] に応じた付随する鍵) を生成し、クレデンシャルとして保存する。 */
+    fun create(
+        rpId: String,
+        rpName: String?,
+        user: UserEntity,
+        discoverable: Boolean,
+        options: CredentialOptions = CredentialOptions()
+    ): StoredCredential
 
     /** 指定 RP のうち、ID が [ids] のいずれかと一致するクレデンシャルを返す。 */
     fun findByIds(rpId: String, ids: List<ByteArray>): List<StoredCredential>
@@ -89,6 +106,13 @@ interface CredentialStore {
 
     /** クレデンシャルの秘密鍵で [data] に署名し、DER 形式の ECDSA 署名を返す。 */
     fun sign(credential: StoredCredential, data: ByteArray): ByteArray
+
+    /**
+     * hmac-secret 拡張の CredRandom (32 バイト) を返す。[userVerified] で UV あり用 / なし用を選ぶ。
+     * credential に CredRandom がない場合は null (拡張を無視する)。
+     * 鍵を使えない場合は [KeyUseNotAuthorizedException] を投げる。
+     */
+    fun credRandom(credential: StoredCredential, userVerified: Boolean): ByteArray?
 
     /** 署名カウンタを 1 増やし、更新後の値を返す。 */
     fun incrementSignCount(credential: StoredCredential): Long

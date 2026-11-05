@@ -16,6 +16,7 @@
 
 - **FIDO2 security key over NFC** — Host-based card emulation (HCE) of the FIDO applet; CTAP 2.0 commands MakeCredential, GetAssertion, GetNextAssertion, GetInfo, Selection, and Reset (optional)
 - **Passkeys and non-discoverable credentials** — ES256 (ECDSA P-256), multiple accounts per site, `none` or packed self attestation
+- **hmac-secret extension** — the CTAP extension behind WebAuthn PRF; the per-credential secret is derived from an HMAC key kept in Android Keystore
 - **Keys in the Android Keystore** — A private key is generated for each registration in StrongBox (or the TEE) and never leaves the device; delete keys individually or all at once
 - **Authentication only when you allow it** — Only while the app is on screen, only within a short window after fingerprint (or screen lock) verification, and by default only once per verification
 - **Event log** — Results of each registration and authentication (kept in memory only)
@@ -61,7 +62,7 @@ See [Testing](docs/TESTING.md) for step-by-step checks on Windows, macOS, and An
 | macOS (Chrome) | NFC | Not supported by the browser |
 | Windows / macOS browsers | Bluetooth HID | Experimental |
 
-Known limitations (no clientPIN, CTAP 2.0 only, no U2F, no extensions, and so on) are listed in the [design documents](docs/design/appendix/C_roadmap.md).
+Known limitations (no clientPIN, CTAP 2.0 only, no U2F, no extensions other than hmac-secret, and so on) are listed in the [design documents](docs/design/appendix/C_roadmap.md).
 
 ## Documentation
 

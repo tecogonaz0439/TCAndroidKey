@@ -10,7 +10,7 @@
 | L-01 | clientPIN 非対応 | RP / クライアントが PIN 設定済みの認証器を要求する場合に登録できない。python-fido2 2.0.0 の `Fido2Client` は UV required で PIN/UV プロトコルの選択に失敗する (DD-10 §4 注 1) | RP の userVerification を `preferred` 等にする。python-fido2 は低水準 `Ctap2` を使う |
 | L-02 | CTAP 2.1 非対応 (versions は `FIDO_2_0` のみ) | credProtect、credentialManagement、authenticatorConfig 等が使えない | — |
 | L-03 | U2F (CTAP1) 非対応 | U2F 専用の古い RP で使えない | — |
-| L-04 | 拡張 (hmac-secret, credProtect, largeBlob, minPinLength 等) 非対応 | 拡張を必須とする RP で使えない | — |
+| L-04 | 拡張 (credProtect, largeBlob, minPinLength 等) 非対応 (hmac-secret は対応。DD-01 §11.2) | 拡張を必須とする RP で使えない。CTAP 2.0 で clientPin のない認証器に対して、ブラウザ等の高水準のクライアントが hmac-secret (PRF) の鍵交換を行うかは未確認 | python-fido2 の低水準 `Ctap2` で試験する (DD-10 CT-06) |
 | L-05 | ES256 のみ | EdDSA / RS256 のみを指定する RP で使えない | RP の pubKeyCredParams に ES256 を含める |
 | L-06 | NFC で本人確認前にかざすと 2 回かざす必要がある | 操作の手間 | 先に「本人確認して開始」を行う |
 | L-07 | USB 非対応 (技術的に不可) | — | NFC / Bluetooth を使う |
@@ -29,7 +29,7 @@
 | F-02 | clientPIN (PIN/UV Auth Protocol 2) | PIN 必須の RP・クライアントでの試験に対応する | 中 |
 | F-03 | CTAP 2.1 (`FIDO_2_1`) | credProtect、credentialManagement、getPinUvAuthTokenUsingUvWithPermissions | 中 |
 | F-04 | NFC での待機 (CTAP 2.1 の 0x9100 / NFCCTAP_GETRESPONSE) | 本人確認前にかざしても 1 回で完了できるようにする (クライアント対応の調査が必要) | 低 |
-| F-05 | hmac-secret 拡張 | PRF 拡張を使う RP の試験に対応する | 低 |
+| F-05 | hmac-secret 拡張 | PRF 拡張を使う RP の試験に対応する | 済 (2026-11-05。DD-01 §11.2) |
 | F-06 | U2F (CTAP1) | U2F の RP の試験に対応する | 低 |
 | F-07 | 試験用の操作機能 | 署名カウンタの手動設定・UV フラグを立てない応答など、RP の異常系試験用の機能 (テスト用ツールとしての拡張) | 中 |
 | F-08 | Android 依存部分の自動テスト | 認可判定は `AuthorizationGate` として JVM テスト済み (1.1)。残りは計装テスト (Keystore の読み込み失敗・保存失敗、HCE の切断・再接続、Bluetooth の登録解除) | 中 |

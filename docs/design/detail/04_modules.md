@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-04 |
-| 版数 | 1.2 |
+| 版数 | 1.3 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.3 (2026-11-05): `ClientPin`・`HmacSecret`・`CredentialOptions`、`CredentialStore.credRandom` を追加 |
 | 改訂 | 1.2 (2026-11-05): `fido.pin` パッケージ (PIN/UV Auth Protocol) を追加 |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応 (`AuthorizationGate`・`AuthorizationLease` の追加、`TransportPolicy`・`onOperationCompleted`・`deleteDiscoverable` の廃止ほか)。`review/FIX_PLAN.md` |
 | 関連文書 | BD-03 アーキテクチャ |
@@ -21,10 +22,11 @@ classDiagram
     }
     class CredentialStore {
         <<interface>>
-        +create(rpId, rpName, user, discoverable) StoredCredential
+        +create(rpId, rpName, user, discoverable, options) StoredCredential
         +findByIds(rpId, ids) List
         +findDiscoverable(rpId) List
         +sign(credential, data) ByteArray
+        +credRandom(credential, userVerified) ByteArray?
         +incrementSignCount(credential) Long
         +list() List
         +delete(id) Boolean
@@ -108,8 +110,11 @@ classDiagram
 | クラス | 責務 |
 |---|---|
 | `Ctap2Authenticator` | CTAP2 コマンド処理 (DD-01)。1 トランスポートに 1 インスタンス (GetNextAssertion 状態を保持)。`process` は `@Synchronized`、`resetSession` はブロックしない (`@Volatile`)。時計は wall clock (イベント) と単調時計 (GetNextAssertion) を注入できる |
-| `CredentialStore` | 鍵保管の抽象 (スレッドセーフであること) |
-| `StoredCredential` | クレデンシャルのメタデータ (DD-06 §2)。秘密鍵は含まない。等価性は全フィールドの内容 (StateFlow の更新を抑止しないため)。同一性は `isSameCredential`。並び順 `NEWEST_FIRST` (作成日時の新しい順、同時刻は ID 順) |
+| `CredentialStore` | 鍵保管の抽象 (スレッドセーフであること)。`create(…, options)`、`credRandom(credential, userVerified)` (hmac-secret。CredRandom がなければ null) |
+| `CredentialOptions` | 登録時の属性 (`hmacSecret`) |
+| `ClientPin` | authenticatorClientPIN (0x06。getKeyAgreement のみ) と、プロトコル番号ごとの `PinUvAuthProtocol` (鍵交換の鍵) の保持。`protocol(version)`、`sharedSecret(protocol, keyAgreement)`、`regenerate()` (Reset 時) |
+| `HmacSecret` / `HmacSecretInput` | hmac-secret 拡張 (DD-01 §11.2)。登録の要求の判定、認証の入力の検証と salt の復号、出力の暗号化 |
+| `StoredCredential` | クレデンシャルのメタデータ (DD-06 §2。`hmacSecret` を含む)。秘密鍵は含まない。等価性は全フィールドの内容 (StateFlow の更新を抑止しないため)。同一性は `isSameCredential`。並び順 `NEWEST_FIRST` (作成日時の新しい順、同時刻は ID 順) |
 | `UserEntity` | `id` / `name` / `displayName` |
 | `KeySecurityLevel` | `STRONGBOX` / `TEE` / `SOFTWARE` / `UNKNOWN` |
 | `AuthorizationPolicy` / `AuthorizationRequest` / `AuthorizationResult` | 認可の抽象 (DD-01 §1.4) |

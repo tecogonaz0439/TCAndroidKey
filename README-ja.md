@@ -16,6 +16,7 @@
 
 - **NFC による FIDO2 セキュリティキー** — ホストカードエミュレーション (HCE) で FIDO アプレットとして動作。CTAP 2.0 の MakeCredential、GetAssertion、GetNextAssertion、GetInfo、Selection、Reset (任意) に対応
 - **パスキーと非検出クレデンシャル** — ES256 (ECDSA P-256)、1 サイトに複数アカウント、アテステーションは `none` または packed の自己アテステーション
+- **hmac-secret 拡張** — WebAuthn の PRF 拡張の基盤となる CTAP の拡張。credential ごとの秘密値は Android Keystore の HMAC 鍵から導出
 - **Android Keystore 内の鍵** — 登録ごとに StrongBox (または TEE) 内で秘密鍵を生成し、端末外へ出さない。個別削除・全削除に対応
 - **許可したときだけ認証** — アプリの画面が表示されている間、指紋 (または画面ロック) による本人確認の直後の短い時間だけ、既定では本人確認 1 回につき 1 回だけ応答
 - **イベントログ** — 登録・認証ごとの結果を表示 (メモリ内のみに保持)
@@ -61,7 +62,7 @@ Windows・macOS・Android での手順ごとの確認方法 ([python-fido2](http
 | macOS (Chrome) | NFC | ブラウザが非対応 |
 | Windows / macOS のブラウザ | Bluetooth HID | 実験的 |
 
-既知の制約 (clientPIN 非対応、CTAP 2.0 のみ、U2F 非対応、拡張機能非対応など) は [設計書](docs/design/appendix/C_roadmap.md) に記載しています。
+既知の制約 (clientPIN 非対応、CTAP 2.0 のみ、U2F 非対応、hmac-secret 以外の拡張機能非対応など) は [設計書](docs/design/appendix/C_roadmap.md) に記載しています。
 
 ## ドキュメント
 

@@ -152,7 +152,9 @@ class Ctap2AuthorizationTest {
     @Test
     fun checkedExceptionsFromTheStoreBecomeErrOther() {
         val failing = object : CredentialStore by store {
-            override fun create(rpId: String, rpName: String?, user: UserEntity, discoverable: Boolean): StoredCredential =
+            override fun create(
+                rpId: String, rpName: String?, user: UserEntity, discoverable: Boolean, options: CredentialOptions
+            ): StoredCredential =
                 throw IOException("disk full")
         }
         val a = Ctap2Authenticator(failing, policy, { config }, "test")
@@ -173,10 +175,12 @@ class Ctap2AuthorizationTest {
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
         val slowStore = object : CredentialStore by store {
-            override fun create(rpId: String, rpName: String?, user: UserEntity, discoverable: Boolean): StoredCredential {
+            override fun create(
+                rpId: String, rpName: String?, user: UserEntity, discoverable: Boolean, options: CredentialOptions
+            ): StoredCredential {
                 entered.countDown()
                 release.await(5, TimeUnit.SECONDS)
-                return store.create(rpId, rpName, user, discoverable)
+                return store.create(rpId, rpName, user, discoverable, options)
             }
         }
         val nfc = Ctap2Authenticator(slowStore, gatePolicy(), { config }, "NFC")

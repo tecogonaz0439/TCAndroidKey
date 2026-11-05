@@ -7,6 +7,7 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -237,13 +238,16 @@ private fun CredentialCard(credential: StoredCredential, onDelete: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     AssistChip(
                         onClick = {},
                         label = {
                             Text(stringResource(if (credential.discoverable) R.string.credential_discoverable else R.string.credential_non_discoverable))
                         }
                     )
+                    if (credential.hmacSecret) {
+                        AssistChip(onClick = {}, label = { Text(stringResource(R.string.credential_hmac_secret)) })
+                    }
                     val weakKey = credential.securityLevel == KeySecurityLevel.SOFTWARE ||
                         credential.securityLevel == KeySecurityLevel.UNKNOWN
                     AssistChip(

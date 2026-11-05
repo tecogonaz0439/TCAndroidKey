@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-10 |
-| 版数 | 1.4 |
+| 版数 | 1.5 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.5 (2026-11-05): hmac-secret の単体テスト (UT-123〜131)、CT-06 を追加。UT-10・UT-107・CT-05 を更新 |
 | 改訂 | 1.4 (2026-11-05): PIN/UV Auth Protocol の単体テスト (UT-112〜122) を追加。UT-107・CT-05 に Protocol 1 / 2 の照合を追加 |
 | 改訂 | 1.3 (2026-11-03): IT-35 (利用規約・セキュリティポリシー)、UT-108〜111 (app の単体テスト) を追加 |
 | 改訂 | 1.2 (2026-11-02): IT-33 (言語設定)、IT-34 (注意書き) を追加 |
@@ -13,7 +14,7 @@
 
 ## 1. 単体テスト (UT)
 
-実行: `./gradlew :fido-core:test testDebugUnitTest` (計 122 件: fido-core 118 件、app 4 件。うち UT-107 は環境変数指定時のみ実行。2026-11-05 時点で全件成功)
+実行: `./gradlew :fido-core:test testDebugUnitTest` (計 131 件: fido-core 127 件、app 4 件。うち UT-107 は環境変数指定時のみ実行。2026-11-05 時点で全件成功)
 
 ### 1.1 CBOR (`CborTest`)
 
@@ -36,7 +37,7 @@
 
 | ID | テスト | 確認内容 | 要件 |
 |---|---|---|---|
-| UT-10 | getInfoAdvertisesFido20WithBuiltInUv | versions、AAGUID、options (rk/uv/plat、clientPin なし) | FR-06 |
+| UT-10 | getInfoAdvertisesFido20WithBuiltInUv | versions、AAGUID、options (rk/uv/plat、clientPin なし)、extensions `["hmac-secret"]`、pinProtocols `[1]` | FR-06, FR-21 |
 | UT-11 | makeCredentialThenGetAssertionWithAllowListVerifiesSignature | 登録 → allowList 認証。rpIdHash、フラグ、AAGUID、COSE 鍵、カウンタ、**署名を公開鍵で検証** | FR-04, FR-05 |
 | UT-12 | selfAttestationIsSignedByCredentialKey | packed 自己アテステーションの署名検証 | FR-16 |
 | UT-13 | discoverableCredentialsAreEnumeratedWithGetNextAssertion | パスキー 2 件の列挙、numberOfCredentials、user 情報、別 RP の除外 | FR-05 |
@@ -165,7 +166,7 @@
 
 | ID | テスト | 確認内容 | 要件 |
 |---|---|---|---|
-| UT-107 | exportVectors | 環境変数 `TCSKE_INTEROP_OUT` 指定時のみ、GetInfo・packed 自己アテステーションの MakeCredential・GetAssertion の応答と、PIN/UV Auth Protocol 1 / 2 の照合用ベクタ (プラットフォーム鍵の秘密スカラー、認証器の公開鍵・暗号文・HMAC) を出力 (CT-05 で検証) | FR-04〜06, FR-16 |
+| UT-107 | exportVectors | 環境変数 `TCSKE_INTEROP_OUT` 指定時のみ、GetInfo・packed 自己アテステーションの MakeCredential・GetAssertion の応答と、PIN/UV Auth Protocol 1 / 2 の照合用ベクタ (プラットフォーム鍵の秘密スカラー、認証器の公開鍵・暗号文・HMAC)、hmac-secret の往復 (登録 → salt 2 つの認証、CredRandom) を出力 (CT-05 で検証) | FR-04〜06, FR-16 |
 
 ### 1.10 文書のリンク解決 (`LegalDocumentTest`、app モジュール)
 
@@ -194,6 +195,20 @@
 | UT-121 | invalidCiphertextLengthsAreRejected | 16 の倍数でない・空の暗号文、IV のみの暗号文、鍵の長さの不正を拒否 | SEC-10 |
 | UT-122 | createReturnsNullForUnknownVersions | 番号 1 / 2 以外のプロトコルは生成しない | — (基盤) |
 
+### 1.12 hmac-secret と ClientPIN の鍵交換 (`HmacSecretTest`)
+
+| ID | テスト | 確認内容 | 要件 |
+|---|---|---|---|
+| UT-123 | getKeyAgreementReturnsACoseKeyAndRejectsInvalidRequests | getKeyAgreement の COSE_Key。Protocol 2 は `0x02`、欠落 `0x14`、型不正 `0x11`、他のサブコマンド `0x3E`。認可を求めない | FR-21, SEC-10 |
+| UT-124 | makeCredentialReportsTheExtensionOnlyWhenRequested | `true` で ED と `{"hmac-secret": true}`、なし・`false` では出力も CredRandom もない、真偽値以外は `0x11` | FR-21 |
+| UT-125 | getAssertionReturnsEncryptedOutputsForOneOrTwoSalts | salt 1 つ / 2 つの出力をプラットフォーム側で復号し `HMAC(CredRandomWithUV, salt)` と一致。ED が立ち、署名は拡張を含む authData で検証できる | FR-21 |
+| UT-126 | outputsAreDeterministicPerSaltAndDifferWithoutUv | 同じ salt で同じ出力。UV なしの認証では CredRandomWithoutUV の出力 (UV ありと異なる) | FR-21 |
+| UT-127 | protocolDefaultsToOneWhenOmitted | pinUvAuthProtocol を省略すると Protocol 1 | FR-21 |
+| UT-128 | invalidInputsAreRejectedBeforeAuthorization | saltAuth 不一致 `0x33`、salt 長 48 バイト・Protocol 2・曲線外の点 `0x02`、欠落 `0x14`、型不正 `0x11`、`up: false` `0x2B`。いずれも認可を求めない | FR-21, SEC-10 |
+| UT-129 | credentialWithoutHmacSecretIgnoresTheExtension | hmac-secret なしの credential では出力を付けない | FR-21 |
+| UT-130 | getNextAssertionReturnsOutputsForEachCredential | GetNextAssertion でも各 credential の CredRandom で出力 | FR-05, FR-21 |
+| UT-131 | resetRegeneratesTheKeyAgreementKey | Reset で鍵交換の公開鍵が変わる | FR-10, FR-21 |
+
 ## 2. CTAP 結合試験 (CT)
 
 `scripts/test/fido2_nfc_test.py` (python-fido2 + PC/SC) を ENV-01 / ENV-02 で実行する。
@@ -204,7 +219,8 @@
 | CT-02 | 引数なしで実行 (登録 → 再度本人確認 → 認証) | MakeCredential のフラグに UP・UV・AT、GetAssertion の署名検証 OK、counter ≥ 1 | FR-04, FR-05 |
 | CT-03 | アテステーションを「自己アテステーション」にして CT-02 | fmt = packed、`PackedAttestation` による署名検証 OK (検証できなければスクリプトは終了コード 1) | FR-16 |
 | CT-04 | 本人確認せずに `--info` | デバイスが見つからない (SELECT 拒否)、端末に本人確認ダイアログ | FR-15, SEC-04 |
-| CT-05 | 実機なし: `TCSKE_INTEROP_OUT=… ./gradlew :fido-core:test --tests '*InteropVectorExport*' --rerun` → `python3 scripts/test/verify_interop_vectors.py …` | python-fido2 が GetInfo を解析し、packed 自己アテステーション (SELF) とアサーションの署名を検証できる。PIN/UV Auth Protocol 1 / 2 について、`PinProtocolV1` / `PinProtocolV2` で導出した共有鍵で認証器の暗号文を復号でき、HMAC が一致する (2026-11-05、python-fido2 2.0.0 で確認済み) | FR-04〜06, FR-16 |
+| CT-05 | 実機なし: `TCSKE_INTEROP_OUT=… ./gradlew :fido-core:test --tests '*InteropVectorExport*' --rerun` → `python3 scripts/test/verify_interop_vectors.py …` | python-fido2 が GetInfo を解析し、packed 自己アテステーション (SELF) とアサーションの署名を検証できる。PIN/UV Auth Protocol 1 / 2 について、`PinProtocolV1` / `PinProtocolV2` で導出した共有鍵で認証器の暗号文を復号でき、HMAC が一致する。hmac-secret について、登録の拡張出力、ED フラグ付きのアサーションの署名、復号した 2 つの出力が `HMAC(CredRandom, salt)` に一致する (2026-11-05、python-fido2 2.0.0 で確認済み) | FR-04〜06, FR-16, FR-21 |
+| CT-06 | 本人確認後に `--hmac-secret` を実行 (登録 → 認証 → hmac-secret の認証 2 回。ワンタイム ON の場合は都度本人確認) | 登録の拡張出力が `{"hmac-secret": true}`、SC-02 にチップ「hmac-secret (PRF)」。認証で 64 バイトの出力を復号でき、2 回の認証で同じ値 | FR-21 |
 
 python-fido2 は 2.0.0 を基準とする (`pip install "fido2[pcsc]==2.0.0"`)。試験スクリプトは低水準 API (`Ctap2`) を使い、
 内蔵 UV を `options={"uv": True}` で直接指定する。高水準 API (`Fido2Client`) は §4 の注記を参照。
@@ -290,7 +306,8 @@ python-fido2 は 2.0.0 を基準とする (`pip install "fido2[pcsc]==2.0.0"`)�
 | FR-16 | UT-12, 50, 104, CT-03, CT-05 |
 | FR-17 / FR-18 | UT-19, 74, IT-17 |
 | FR-19 / FR-20 | IT-33 / UT-108〜111, IT-34, IT-35 |
+| FR-21 | UT-10, 107, 123〜131, CT-05, CT-06 |
 | NFR-03 / 04 / 07 / 09 / 10 | IT-22 / IT-15 / IT-20 / IT-21, 30 / IT-19 |
 | (品質: アクセシビリティ) | IT-29 |
 | SEC-02〜SEC-04 | UT-17, 26, 64, 65, 75, 77〜79, 81, 85, IT-07, 08, 11, 16, 24, 25 |
-| SEC-07 / SEC-09 / SEC-10 | IT-18 / IT-10, 12, 13 / UT-05〜07, 09, 22, 36, 38, 40〜42, 48, 49, 54, 84, 92〜94, 116, 120, 121 |
+| SEC-07 / SEC-09 / SEC-10 | IT-18 / IT-10, 12, 13 / UT-05〜07, 09, 22, 36, 38, 40〜42, 48, 49, 54, 84, 92〜94, 116, 120, 121, 123, 128 |

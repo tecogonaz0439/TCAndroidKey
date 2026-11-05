@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-BD-04 |
-| 版数 | 1.1 |
+| 版数 | 1.2 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.2 (2026-11-05): ClientPIN (getKeyAgreement のみ) と hmac-secret 拡張を追加 |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応 (GET RESPONSE の CLA、拡張長応答、互換性の注記)。`review/FIX_PLAN.md` |
 | 関連文書 | DD-01 CTAP2、DD-02 NFC、DD-03 Bluetooth HID |
 
@@ -25,8 +26,9 @@
 | 項目 | 内容 |
 |---|---|
 | バージョン | `FIDO_2_0` |
-| 対応コマンド | GetInfo (0x04)、MakeCredential (0x01)、GetAssertion (0x02)、GetNextAssertion (0x08)、Reset (0x07)、Selection (0x0B) |
-| 非対応 | ClientPIN (0x06)、CredentialManagement (0x0A)、CTAP1/U2F |
+| 対応コマンド | GetInfo (0x04)、MakeCredential (0x01)、GetAssertion (0x02)、GetNextAssertion (0x08)、ClientPIN (0x06、getKeyAgreement のみ)、Reset (0x07)、Selection (0x0B) |
+| 拡張 | hmac-secret (PIN/UV Auth Protocol 1 の鍵交換) |
+| 非対応 | ClientPIN の PIN 関連サブコマンド、CredentialManagement (0x0A)、CTAP1/U2F |
 | アルゴリズム | ES256 (COSE -7、ECDSA P-256 / SHA-256) |
 | ユーザー検証 | 内蔵 UV (`uv: true`)。PIN は使わない |
 | アテステーション | `none` (既定) / `packed` 自己アテステーション |

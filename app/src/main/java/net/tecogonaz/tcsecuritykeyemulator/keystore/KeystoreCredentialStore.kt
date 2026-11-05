@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import net.tecogonaz.tcsecuritykeyemulator.domain.AppSettings
+import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.CredentialOptions
 import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.CredentialStore
 import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.CtapException
 import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.CtapStatus
@@ -33,6 +34,9 @@ import java.security.SecureRandom
 import java.security.Signature
 import java.security.interfaces.ECPublicKey
 import java.security.spec.ECGenParameterSpec
+import javax.crypto.KeyGenerator
+import javax.crypto.Mac
+import javax.crypto.SecretKey
 
 /**
  * Android Keystore (TEE / StrongBox) に秘密鍵を保持するクレデンシャルストア。
@@ -41,6 +45,8 @@ import java.security.spec.ECGenParameterSpec
  * - 鍵はユーザー認証 (Class 3 生体認証または画面ロック資格情報) から一定時間のみ署名に使用でき、
  *   端末ロック中は使用できない (`setUnlockedDeviceRequired`)。
  * - 秘密鍵は Keystore の外へ取り出せない。端末のバックアップ・移行の対象にもならない。
+ * - hmac-secret 拡張を要求された credential には HMAC-SHA256 鍵 (エイリアス `fido_hmac_<credentialIdHex>`) を生成し、
+ *   CredRandom (UV あり用 / なし用) を Keystore 内の HMAC で導出する。認証・ロックの条件は署名鍵と同じ。
  */
 class KeystoreCredentialStore(
     context: Context,
@@ -119,7 +125,13 @@ class KeystoreCredentialStore(
     }
 
     @Synchronized
-    override fun create(rpId: String, rpName: String?, user: UserEntity, discoverable: Boolean): StoredCredential {
+    override fun create(
+        rpId: String,
+        rpName: String?,
+        user: UserEntity,
+        discoverable: Boolean,
+        options: CredentialOptions
+    ): StoredCredential {
         ensureLoaded()
         val id = ByteArray(CREDENTIAL_ID_LENGTH).also { random.nextBytes(it) }
         val alias = alias(id)
@@ -134,6 +146,20 @@ class KeystoreCredentialStore(
             // 画面ロック未設定などで鍵を生成できない
             throw CtapException(CtapStatus.ERR_OPERATION_DENIED, "key generation failed: ${e.message}")
         }
+        if (options.hmacSecret) {
+            try {
+                try {
+                    generateHmacKey(hmacAlias(id), useStrongBox)
+                } catch (e: StrongBoxUnavailableException) {
+                    generateHmacKey(hmacAlias(id), false)
+                }
+            } catch (e: Exception) {
+                // hmac-secret を要求された登録は、CredRandom を作れなければ全体を失敗させる
+                runCatching { keyStore().deleteEntry(alias) }
+                runCatching { keyStore().deleteEntry(hmacAlias(id)) }
+                throw CtapException(CtapStatus.ERR_OPERATION_DENIED, "hmac-secret key generation failed: ${e.message}")
+            }
+        }
         val (x, y) = EcKeys.coordinates(keyPair.public as ECPublicKey)
         val credential = StoredCredential(
             id = id,
@@ -146,12 +172,15 @@ class KeystoreCredentialStore(
             signCount = 0,
             publicKeyX = x,
             publicKeyY = y,
-            securityLevel = securityLevelOf(keyPair.private)
+            securityLevel = securityLevelOf(keyPair.private),
+            hmacSecret = options.hmacSecret
         )
         try {
             saveAndCommit(LinkedHashMap(cache).apply { put(credential.idHex, credential) })
         } catch (e: Exception) {
-            runCatching { keyStore().deleteEntry(alias) } // メタデータのない鍵を残さない
+            // メタデータのない鍵を残さない
+            runCatching { keyStore().deleteEntry(alias) }
+            runCatching { keyStore().deleteEntry(hmacAlias(id)) }
             throw e
         }
         return credential
@@ -172,6 +201,21 @@ class KeystoreCredentialStore(
         val generator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, MetadataStore.ANDROID_KEYSTORE)
         generator.initialize(spec)
         return generator.generateKeyPair()
+    }
+
+    private fun generateHmacKey(alias: String, strongBox: Boolean): SecretKey {
+        val spec = KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_SIGN)
+            .setUserAuthenticationRequired(true)
+            .setUserAuthenticationParameters(
+                AppSettings.KEYSTORE_AUTH_VALIDITY_SECONDS,
+                KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
+            )
+            .setUnlockedDeviceRequired(true)
+            .setIsStrongBoxBacked(strongBox)
+            .build()
+        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_HMAC_SHA256, MetadataStore.ANDROID_KEYSTORE)
+        generator.init(spec)
+        return generator.generateKey()
     }
 
     private fun securityLevelOf(key: PrivateKey): KeySecurityLevel = runCatching {
@@ -219,6 +263,30 @@ class KeystoreCredentialStore(
         }
     }
 
+    /**
+     * CredRandom = HMAC-SHA256(K, "CredRandomWithUV" / "CredRandomWithoutUV")。K は Keystore 内の HMAC 鍵で、外へ取り出さない。
+     * HMAC 鍵がない credential (hmac-secret なしで登録) は null。
+     */
+    override fun credRandom(credential: StoredCredential, userVerified: Boolean): ByteArray? {
+        if (!credential.hmacSecret) return null
+        val key = keyStore().getKey(hmacAlias(credential.id), null) as? SecretKey ?: return null
+        val mac = Mac.getInstance("HmacSHA256")
+        try {
+            mac.init(key)
+        } catch (e: UserNotAuthenticatedException) {
+            throw KeyUseNotAuthorizedException("user authentication expired", e)
+        } catch (e: KeyPermanentlyInvalidatedException) {
+            throw KeyUseNotAuthorizedException("key permanently invalidated (lock screen changed)", e)
+        } catch (e: InvalidKeyException) {
+            throw KeyUseNotAuthorizedException("key unusable: ${e.message}", e)
+        }
+        return try {
+            mac.doFinal(if (userVerified) LABEL_WITH_UV else LABEL_WITHOUT_UV)
+        } catch (e: Exception) {
+            throw KeyUseNotAuthorizedException("HMAC failed: ${e.message}", e)
+        }
+    }
+
     @Synchronized
     override fun incrementSignCount(credential: StoredCredential): Long {
         ensureLoaded()
@@ -244,6 +312,7 @@ class KeystoreCredentialStore(
         if (removed) saveAndCommit(LinkedHashMap(cache).apply { remove(key) })
         // 鍵の削除に失敗しても、メタデータのない鍵は全削除 (エイリアスの接頭辞で検索) で除去される
         runCatching { keyStore().deleteEntry(alias(id)) }
+        runCatching { keyStore().deleteEntry(hmacAlias(id)) }
         return removed
     }
 
@@ -254,7 +323,7 @@ class KeystoreCredentialStore(
     @Synchronized
     override fun deleteAll() {
         val ks = keyStore()
-        ks.aliases().toList().filter { it.startsWith(ALIAS_PREFIX) }.forEach {
+        ks.aliases().toList().filter { it.startsWith(ALIAS_PREFIX) || it.startsWith(HMAC_ALIAS_PREFIX) }.forEach {
             runCatching { ks.deleteEntry(it) }
         }
         metadata.deleteFile()
@@ -266,8 +335,15 @@ class KeystoreCredentialStore(
 
     private fun alias(id: ByteArray): String = ALIAS_PREFIX + Hex.encode(id)
 
+    private fun hmacAlias(id: ByteArray): String = HMAC_ALIAS_PREFIX + Hex.encode(id)
+
     companion object {
         const val ALIAS_PREFIX = "fido_cred_"
+
+        /** hmac-secret の HMAC 鍵のエイリアスの接頭辞 (変更しない識別子)。 */
+        const val HMAC_ALIAS_PREFIX = "fido_hmac_"
+        private val LABEL_WITH_UV = "CredRandomWithUV".toByteArray(Charsets.US_ASCII)
+        private val LABEL_WITHOUT_UV = "CredRandomWithoutUV".toByteArray(Charsets.US_ASCII)
         const val CREDENTIAL_ID_LENGTH = 32
     }
 }

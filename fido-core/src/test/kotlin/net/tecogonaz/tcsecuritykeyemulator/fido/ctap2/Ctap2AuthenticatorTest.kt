@@ -76,6 +76,8 @@ class Ctap2AuthenticatorTest {
         assertEquals(true, options["uv"])
         assertEquals(false, options["plat"])
         assertFalse(options.containsKey("clientPin"))
+        assertEquals(listOf("hmac-secret"), info[2L])
+        assertEquals(listOf(1L), info[6L])
     }
 
     @Test

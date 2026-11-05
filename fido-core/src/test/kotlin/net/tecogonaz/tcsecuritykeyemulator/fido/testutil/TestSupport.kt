@@ -7,6 +7,7 @@ import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.AuthorizationLease
 import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.AuthorizationPolicy
 import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.AuthorizationRequest
 import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.AuthorizationResult
+import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.CredentialOptions
 import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.CredentialStore
 import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.CtapStatus
 import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.EcKeys
@@ -32,18 +33,31 @@ import java.security.spec.ECPublicKeySpec
 class InMemoryCredentialStore : CredentialStore {
     private val creds = LinkedHashMap<String, StoredCredential>()
     private val keys = HashMap<String, PrivateKey>()
+    private val credRandoms = HashMap<String, Pair<ByteArray, ByteArray>>()
     private var now = 1_000L
     private val random = SecureRandom()
 
-    override fun create(rpId: String, rpName: String?, user: UserEntity, discoverable: Boolean): StoredCredential {
+    override fun create(
+        rpId: String,
+        rpName: String?,
+        user: UserEntity,
+        discoverable: Boolean,
+        options: CredentialOptions
+    ): StoredCredential {
         val kpg = KeyPairGenerator.getInstance("EC")
         kpg.initialize(ECGenParameterSpec("secp256r1"))
         val kp = kpg.generateKeyPair()
         val id = ByteArray(32).also { random.nextBytes(it) }
         val (x, y) = EcKeys.coordinates(kp.public as ECPublicKey)
-        val c = StoredCredential(id, rpId, rpName, user, discoverable, now++, null, 0, x, y, KeySecurityLevel.SOFTWARE)
+        val c = StoredCredential(
+            id, rpId, rpName, user, discoverable, now++, null, 0, x, y, KeySecurityLevel.SOFTWARE,
+            hmacSecret = options.hmacSecret
+        )
         creds[c.idHex] = c
         keys[c.idHex] = kp.private
+        if (options.hmacSecret) {
+            credRandoms[c.idHex] = ByteArray(32).also { random.nextBytes(it) } to ByteArray(32).also { random.nextBytes(it) }
+        }
         return c
     }
 
@@ -60,6 +74,12 @@ class InMemoryCredentialStore : CredentialStore {
         return s.sign()
     }
 
+    override fun credRandom(credential: StoredCredential, userVerified: Boolean): ByteArray? =
+        credRandoms[credential.idHex]?.let { (withUv, withoutUv) -> if (userVerified) withUv else withoutUv }
+
+    /** テスト用: credential の CredRandom (UV あり, UV なし)。 */
+    fun credRandoms(credential: StoredCredential): Pair<ByteArray, ByteArray>? = credRandoms[credential.idHex]
+
     override fun incrementSignCount(credential: StoredCredential): Long {
         val cur = creds.getValue(credential.idHex)
         val updated = cur.copy(signCount = cur.signCount + 1, lastUsedAtMillis = now++)
@@ -72,12 +92,14 @@ class InMemoryCredentialStore : CredentialStore {
     override fun delete(id: ByteArray): Boolean {
         val k = net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.Hex.encode(id)
         keys.remove(k)
+        credRandoms.remove(k)
         return creds.remove(k) != null
     }
 
     override fun deleteAll() {
         creds.clear()
         keys.clear()
+        credRandoms.clear()
     }
 }
 

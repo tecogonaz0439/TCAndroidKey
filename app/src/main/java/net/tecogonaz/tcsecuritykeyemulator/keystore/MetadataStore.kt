@@ -115,6 +115,8 @@ internal class MetadataStore(directory: File) {
         put("x", Hex.encode(c.publicKeyX))
         put("y", Hex.encode(c.publicKeyY))
         put("securityLevel", c.securityLevel.name)
+        // 任意項目 (ない場合は false。古い版のファイルもそのまま読める)
+        if (c.hmacSecret) put("hmacSecret", true)
     }
 
     private fun fromJson(o: JSONObject): StoredCredential = StoredCredential(
@@ -133,7 +135,8 @@ internal class MetadataStore(directory: File) {
         publicKeyX = Hex.decode(o.getString("x")),
         publicKeyY = Hex.decode(o.getString("y")),
         securityLevel = runCatching { KeySecurityLevel.valueOf(o.getString("securityLevel")) }
-            .getOrDefault(KeySecurityLevel.UNKNOWN)
+            .getOrDefault(KeySecurityLevel.UNKNOWN),
+        hmacSecret = o.optBoolean("hmacSecret", false)
     )
 
     private fun JSONObject.optStringOrNull(name: String): String? = if (has(name)) getString(name) else null

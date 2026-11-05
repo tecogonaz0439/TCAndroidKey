@@ -53,7 +53,9 @@ class CredentialReplacementTest {
         assertEquals(CtapStatus.OK, mc(1, a))
         val old = store.list().single()
         val failing = object : CredentialStore by store {
-            override fun create(rpId: String, rpName: String?, user: UserEntity, discoverable: Boolean): StoredCredential =
+            override fun create(
+                rpId: String, rpName: String?, user: UserEntity, discoverable: Boolean, options: CredentialOptions
+            ): StoredCredential =
                 throw CtapException(CtapStatus.ERR_OPERATION_DENIED, "key generation failed")
         }
         assertEquals(CtapStatus.ERR_OPERATION_DENIED, mc(1, authenticator(failing)))
