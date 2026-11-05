@@ -114,7 +114,9 @@ class HmacSecretTest {
         assertEquals(CtapStatus.ERR_MISSING_PARAMETER, call(CtapCommand.CLIENT_PIN, linkedMapOf(1L to 1L)).first)
         assertEquals(CtapStatus.ERR_MISSING_PARAMETER, call(CtapCommand.CLIENT_PIN).first)
         assertEquals(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE, call(CtapCommand.CLIENT_PIN, linkedMapOf(1L to "1", 2L to 2L)).first)
-        assertEquals(CtapStatus.ERR_INVALID_SUBCOMMAND, call(CtapCommand.CLIENT_PIN, linkedMapOf(1L to 1L, 2L to 3L)).first)
+        // getUVRetries (0x07) と未定義の番号は未対応
+        assertEquals(CtapStatus.ERR_INVALID_SUBCOMMAND, call(CtapCommand.CLIENT_PIN, linkedMapOf(1L to 1L, 2L to 7L)).first)
+        assertEquals(CtapStatus.ERR_INVALID_SUBCOMMAND, call(CtapCommand.CLIENT_PIN, linkedMapOf(1L to 1L, 2L to 8L)).first)
         assertTrue("clientPIN must not ask for authorization", policy.requests.isEmpty())
     }
 

@@ -3,12 +3,13 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-08 |
-| 版数 | 1.4 |
+| 版数 | 1.5 |
 | 作成日 | 2026-11-02 |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応 (live region、読み込めない場合の表示、SOFTWARE 鍵の注記、複数形)。`review/FIX_PLAN.md` |
 | 改訂 | 1.2 (2026-11-02): 言語設定 (§5)、注意書き (§8)、利用規約・セキュリティポリシー (§9) を追加 |
 | 改訂 | 1.3 (2026-11-05): SC-02 にチップ「hmac-secret (PRF)」を追加 |
 | 改訂 | 1.4 (2026-11-05): SC-02 に credProtect のチップを追加。SC-05 の対応プロトコルを CTAP 2.0 / 2.1 に更新 |
+| 改訂 | 1.5 (2026-11-05): SC-04 に「PIN (clientPIN)」を追加 |
 | 実装 | `app/.../ui/**`, `res/values*/strings.xml` |
 | 関連文書 | BD-06 画面設計 (概要) |
 
@@ -91,6 +92,8 @@
 | 鍵 | StrongBox を優先 (非搭載時は無効表示) | `SettingItemSwitch` | — |
 | | アテステーション (なし / 自己アテステーション) | `SettingItemDropdown` | — |
 | クライアント操作 | PC からのリセットを許可 | `SettingItemSwitch` | ON にする時 |
+| PIN (clientPIN) | PIN の状態: 「未設定 (OS・ブラウザから設定します)」/「設定済み (残り N 回)」(plurals) /「ブロック中 (残り 0 回)…」/「読み込めません…」 | `SettingItemReadOnly` | — |
+| | PIN を消去 (未設定以外の場合のみ表示。説明行「登録済みのクレデンシャルは残ります」) | `SettingItemClickable` | 必要 (DL-01「PIN 消去のために本人確認」) |
 | Bluetooth (実験的) | Bluetooth HID セキュリティキーとして使う (Bluetooth 非搭載時は無効) | `SettingItemSwitch` | — (ON 時に権限要求) |
 
 各項目の下に説明文 (`SettingsHelpText` または説明行) を表示する。

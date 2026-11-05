@@ -18,10 +18,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -29,10 +29,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.tecogonaz.tcsecuritykeyemulator.R
 import net.tecogonaz.tcsecuritykeyemulator.domain.AppSettings
 import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.AttestationMode
+import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.PinStatus
 import net.tecogonaz.tcsecuritykeyemulator.ui.MainViewModel
 import net.tecogonaz.tcsecuritykeyemulator.ui.UiActions
 import net.tecogonaz.tcsecuritykeyemulator.ui.common.SettingItemClickable
 import net.tecogonaz.tcsecuritykeyemulator.ui.common.SettingItemDropdown
+import net.tecogonaz.tcsecuritykeyemulator.ui.common.SettingItemReadOnly
 import net.tecogonaz.tcsecuritykeyemulator.ui.common.SettingItemSwitch
 import net.tecogonaz.tcsecuritykeyemulator.ui.common.SettingsCategoryTitle
 import net.tecogonaz.tcsecuritykeyemulator.ui.common.SettingsHelpText
@@ -44,6 +46,7 @@ import net.tecogonaz.tcsecuritykeyemulator.ui.common.mouseDragScroll
 fun SettingsScreen(viewModel: MainViewModel, actions: UiActions) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val capabilities by viewModel.capabilities.collectAsStateWithLifecycle()
+    val pinStatus by viewModel.pinStatus.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { viewModel.refreshCapabilities() }
 
     val scrollState = rememberScrollState()
@@ -152,6 +155,27 @@ fun SettingsScreen(viewModel: MainViewModel, actions: UiActions) {
                     viewModel.updateSettings { it.copy(allowResetFromClient = false) }
                 }
             }
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            SettingsCategoryTitle(stringResource(R.string.settings_category_pin))
+            SettingItemReadOnly(
+                title = stringResource(R.string.settings_pin_status),
+                subtitle = when {
+                    pinStatus.state == PinStatus.State.UNAVAILABLE -> stringResource(R.string.settings_pin_unavailable)
+                    pinStatus.state == PinStatus.State.NOT_SET -> stringResource(R.string.settings_pin_not_set)
+                    pinStatus.retries <= 0 -> stringResource(R.string.settings_pin_blocked)
+                    else -> pluralStringResource(R.plurals.settings_pin_set, pinStatus.retries, pinStatus.retries)
+                }
+            )
+            if (pinStatus.isSet) {
+                val clearTitle = stringResource(R.string.verify_title_clear_pin)
+                SettingItemClickable(
+                    title = stringResource(R.string.settings_pin_clear),
+                    subtitle = stringResource(R.string.settings_pin_clear_help),
+                    onClick = { actions.verifyThen(clearTitle) { viewModel.clearPin() } }
+                )
+            }
+            SettingsHelpText(stringResource(R.string.settings_pin_help))
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
             SettingsCategoryTitle(stringResource(R.string.settings_category_bluetooth))

@@ -55,7 +55,7 @@
    - Windows のダイアログで「セキュリティキー」を選ぶ → アプリで本人確認 → 端末をリーダーにかざす
    - Authenticate も同様に実施し、成功することを確認する。
 4. Windows の **設定 → アカウント → サインイン オプション → セキュリティ キー → 管理** でも認識を確認できる
-   (本アプリは PIN 非対応のため PIN 設定はできない。リセットは本アプリの設定「PC からのリセットを許可」が ON のときのみ有効)。
+   PIN の追加・変更もここから行える (DD-10 IT-37。本人確認後にかざす)。リセットは本アプリの設定「PC からのリセットを許可」が ON のときのみ有効。
 
 ## 3. macOS 27 + RC-S300/P
 
@@ -122,6 +122,8 @@
 | 20 | `python3 scripts/test/fido2_nfc_test.py --hmac-secret` (PC/SC リーダー) | 登録で hmac-secret が有効になり、クレデンシャル画面に「hmac-secret (PRF)」。2 回の認証で同じ出力 (DD-10 CT-06) |
 | 21 | `python3 scripts/test/fido2_nfc_test.py --client` (PC/SC リーダー。操作ごとに本人確認) | python-fido2 の `Fido2Client` で UV 必須・PRF・credProtect 3 の登録、PRF 付きの認証 3 回、資格情報の管理 (列挙・名前の変更・削除) が成功する (DD-10 CT-08) |
 | 22 | Chrome の「セキュリティ キーの管理」(`chrome://settings/securityKeys`) の「ログイン データ」で、データの表示・削除 | パスキーが列挙され、削除できる (クライアントが内蔵 UV のトークンに対応する場合。結果を互換性マトリクスに記録) |
+| 23 | PIN 未設定で `python3 scripts/test/fido2_nfc_test.py --pin` → 設定画面の「PIN」 | PIN の設定・変更、PIN による登録・認証が成功し、設定画面に「設定済み (残り 8 回)」(DD-10 CT-09) |
+| 24 | 設定画面の「PIN を消去」 | 本人確認後に「未設定」になる。クレデンシャルは残る (DD-10 IT-36) |
 
 ## 7. 実機なしでの応答形式の確認 (python-fido2)
 
@@ -162,6 +164,6 @@ TCSKE_INTEROP_PORT=47777 ./gradlew :fido-core:test --tests '*InteropServer*' --r
 python3 scripts/test/interop_client_e2e.py 127.0.0.1 47777
 ```
 
-コンテナで実行する場合は、ホストのアドレス (Apple `container` では既定で `192.168.64.1`) を指定する。
+clientPIN のシナリオ (`run_pin_scenario`) も続けて実行する。コンテナで実行する場合は、ホストのアドレス (Apple `container` では既定で `192.168.64.1`) を指定する。
 クライアントの出力の最後が `OK`、サーバのログに `one-time consumptions` が UP を伴う登録・認証の回数と一致して表示されれば成功。
 

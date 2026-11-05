@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-BD-04 |
-| 版数 | 1.3 |
+| 版数 | 1.4 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.4 (2026-11-05): clientPIN を追加 |
 | 改訂 | 1.3 (2026-11-05): CTAP 2.1 (pinUvAuthToken、credProtect、credentialManagement) を追加。python-fido2 の `Fido2Client` の想定を更新 |
 | 改訂 | 1.2 (2026-11-05): ClientPIN (getKeyAgreement のみ) と hmac-secret 拡張を追加 |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応 (GET RESPONSE の CLA、拡張長応答、互換性の注記)。`review/FIX_PLAN.md` |
@@ -27,12 +28,12 @@
 | 項目 | 内容 |
 |---|---|
 | バージョン | `FIDO_2_0`、`FIDO_2_1` |
-| 対応コマンド | GetInfo (0x04)、MakeCredential (0x01)、GetAssertion (0x02)、GetNextAssertion (0x08)、ClientPIN (0x06、getKeyAgreement・getPinUvAuthTokenUsingUvWithPermissions)、Reset (0x07)、Selection (0x0B)、CredentialManagement (0x0A) |
+| 対応コマンド | GetInfo (0x04)、MakeCredential (0x01)、GetAssertion (0x02)、GetNextAssertion (0x08)、ClientPIN (0x06。getUVRetries 以外)、Reset (0x07)、Selection (0x0B)、CredentialManagement (0x0A) |
 | 拡張 | hmac-secret、credProtect |
 | PIN/UV Auth Protocol | 2、1 |
-| 非対応 | ClientPIN の PIN 関連サブコマンド、authenticatorConfig (0x0D)、largeBlobs (0x0C)、CTAP1/U2F |
+| 非対応 | ClientPIN の getUVRetries、authenticatorConfig (0x0D)、largeBlobs (0x0C)、CTAP1/U2F |
 | アルゴリズム | ES256 (COSE -7、ECDSA P-256 / SHA-256) |
-| ユーザー検証 | 内蔵 UV (`uv: true`、内蔵 UV による pinUvAuthToken)。PIN は使わない |
+| ユーザー検証 | 内蔵 UV (`uv: true`、内蔵 UV による pinUvAuthToken) と clientPIN (PIN によるトークン) |
 | アテステーション | `none` (既定) / `packed` 自己アテステーション |
 | AAGUID | `523283ca-3c2c-48b5-8bff-a722f900e190` |
 

@@ -19,16 +19,15 @@ AI コーディングエージェント (Claude Code、Codex など) と開発�
 
 - 作業ブランチ: `main` (リポジトリの既定ブランチ。旧名 `claude/friendly-sagan-ipwxxv`)
 - 実装済み: CTAP 2.0 / 2.1 認証器、NFC / Bluetooth HID、Keystore 保管、認可ゲート、UI 一式、言語設定、利用規約・セキュリティポリシー表示、アイコン、
-  PIN/UV Auth Protocol 1 / 2 (`fido.pin`)、hmac-secret・credProtect 拡張、内蔵 UV による pinUvAuthToken、credentialManagement
+  PIN/UV Auth Protocol 1 / 2 (`fido.pin`)、hmac-secret・credProtect 拡張、内蔵 UV・PIN による pinUvAuthToken、credentialManagement、
+  clientPIN (PIN の設定・変更・照合。アプリでは状態の表示と消去)
 - 外部レビュー (ChatGPT Pro、対象 `ecd6e49`) の指摘 29 件は精査・対応済み。判定と不採用の理由は [review/FIX_PLAN.md](review/FIX_PLAN.md)
-- 単体テスト 156 件 (fido-core 152、app 4) 全件成功、lint 指摘 0 件
+- 単体テスト 167 件 (fido-core 163、app 4) 全件成功、lint 指摘 0 件。python-fido2 による照合 (DD-10 CT-05、CT-07) 成功
 - **未実施**:
-  - 実機試験 ([DD-10](docs/design/detail/10_test-cases.md) の IT-01〜35、特に外部レビュー対応の IT-24〜32。hmac-secret・CTAP 2.1 の CT-06・CT-08)
+  - 実機試験 ([DD-10](docs/design/detail/10_test-cases.md) の IT-01〜35、特に外部レビュー対応の IT-24〜32。hmac-secret・CTAP 2.1・clientPIN の CT-06・CT-08・CT-09、IT-36・IT-37)
   - 互換性マトリクスの記録 (DD-10 §4、[AP-C](docs/design/appendix/C_roadmap.md) F-01)
   - GitHub のリポジトリ名の変更 (所有者が手動で行う予定。文書・アプリ内の URL は新名称に変更済み)
-- 進行中: [AP-C](docs/design/appendix/C_roadmap.md) の F-02 (clientPIN: PIN の設定・変更・PIN によるトークンの発行)。
-  手順ごとに main へコミットする
-- 今後の課題の候補は [AP-C](docs/design/appendix/C_roadmap.md) §2 (clientPIN、NFC の待機、試験用の操作機能など)
+- 今後の課題の候補は [AP-C](docs/design/appendix/C_roadmap.md) §2 (NFC の待機、試験用の操作機能、互換性試験など)
 
 ## 3. リポジトリ構成
 
@@ -36,14 +35,14 @@ AI コーディングエージェント (Claude Code、Codex など) と開発�
 fido-core/   FIDO2 プロトコル (Android 非依存の純 Kotlin/JVM)。JVM の単体テストで検証する
   cbor/      CTAP2 canonical CBOR
   ctap2/     Ctap2Authenticator (コマンド処理)、CredentialStore / AuthorizationPolicy / AuthorizationLease / KeepAlive、
-             ClientPin (0x06、pinUvAuthToken)、CredentialManagement (0x0A)、HmacSecret・CredProtect (拡張)
+             ClientPin (0x06、PIN・pinUvAuthToken)、PinStore、CredentialManagement (0x0A)、HmacSecret・CredProtect (拡張)
   pin/       PIN/UV Auth Protocol 1 / 2 (ECDH・HKDF・AES-CBC・HMAC)
   nfc/       ISO 7816-4 APDU (NfcCtapProcessor)
   hid/       CTAPHID (CtapHidProcessor)
   session/   AuthorizationGate (全トランスポート共有の認可判定)
 app/         Android アプリ
   auth/      AuthSessionManager (AuthorizationGate の Android 側ラッパー)、UserVerifier (BiometricPrompt)
-  keystore/  KeystoreCredentialStore、MetadataStore (AES-GCM で暗号化したメタデータ)
+  keystore/  KeystoreCredentialStore、MetadataStore (AES-GCM で暗号化したメタデータ)、KeystorePinStore (PIN)
   nfc/       FidoHostApduService (HCE)
   bluetooth/ BluetoothHidAuthenticator (実験的)
   data/ domain/ ui/   設定・イベントログ・Compose 画面 (ui/document は利用規約等の表示)
@@ -82,23 +81,24 @@ review/      外部レビューの依頼文と対応記録 (履歴として旧�
 - `Ctap2Authenticator` は、鍵の生成・署名の直前と応答の直前に Lease と取消トークンを確認し、すべての経路で `lease.complete()` を呼ぶ。
 - pinUvAuthToken (CTAP 2.1) があっても、登録・認証・資格情報の管理のたびに受付ゲートの認可を得る。トークンの発行・資格情報の管理・
   silent assertion ではワンタイムを消費しない。トークンは発行時の Lease・セッションの世代に結び付ける (DD-01 §12、DD-05 §2.5)。
+- PIN の照合・設定・変更は受付ゲートの認可の後に行う (受付外では試行回数を減らさない)。PIN を読み込めない場合は未設定として扱わない (DD-01 §13)。
 - `Ctap2Authenticator.process` と CTAPHID のワーカーは例外をすべて捕捉する (Kotlin では検査例外も素通りし、ワーカーで落ちるとアプリが終了する)。
 - NFC は接続世代で古い応答を破棄する (`FidoHostApduService`)。CTAPHID の取消は要求ごとの操作 (トークン) で扱う。
 - Google Play 開発者サービスを使わない。**INTERNET 権限を追加しない** (利用規約 第 4 条で通信しないと約束している)。
 - logcat には RP ID・ユーザー名・Bluetooth ホスト名を出さない (`EventLogRepository.log` の `logcatMessage`)。イベントログはメモリのみ。
 - `FLAG_SECURE`、バックアップ除外 (`allowBackup=false`、data extraction rules) を外さない。
-- 削除・保護を弱める設定変更 (ワンタイム OFF、生体認証のみ OFF、リセット許可 ON) には本人確認を要求する。
+- 削除・保護を弱める設定変更 (PIN の消去、ワンタイム OFF、生体認証のみ OFF、リセット許可 ON) には本人確認を要求する。
 - メタデータを読み込めない場合は空として扱わず UNAVAILABLE にする (上書きしない)。更新は保存成功後にキャッシュへ反映する。
 
 ### 5.2 識別子 (変えると既存の端末で鍵が使えなくなる)
 
-- applicationId / パッケージ `net.tecogonaz.tcsecuritykeyemulator`、Keystore のエイリアス (`fido_cred_<id>`、`fido_hmac_<id>`、`tcsecuritykeyemulator_metadata_v1`)、
+- applicationId / パッケージ `net.tecogonaz.tcsecuritykeyemulator`、Keystore のエイリアス (`fido_cred_<id>`、`fido_hmac_<id>`、`tcsecuritykeyemulator_metadata_v1`、`tcsecuritykeyemulator_pin_v1`)、ファイル名 (`credentials.bin`、`pin.bin`)、
   SharedPreferences 名 (`settings`) と各キー、AAGUID (`523283ca-3c2c-48b5-8bff-a722f900e190`) は変更しない。
 - `app/debug.keystore` は上書き更新のために意図的に公開・管理している (残存リスク R-06)。release 用の鍵は Git に入れない。
 
 ### 5.3 プロトコル
 
-- CTAP 2.0 / 2.1 (`FIDO_2_0`、`FIDO_2_1`)、ES256 のみ、PIN なし (内蔵 UV)。拡張は credProtect・hmac-secret。pinUvAuthProtocols は `[2, 1]`
+- CTAP 2.0 / 2.1 (`FIDO_2_0`、`FIDO_2_1`)、ES256 のみ、ユーザー検証は内蔵 UV と clientPIN。拡張は credProtect・hmac-secret。pinUvAuthProtocols は `[2, 1]`
   (2.0 のクライアントのため Protocol 1 を残す)。GetInfo に未対応の機能 (clientPin 等) を広告しない。
 - 2.1 の判断 (DD-01 §12.5): `makeCredUvNotRqd: true` とし `PUAT_REQUIRED` を返さない、MakeCredential の `up: true` を受け付ける。
 - メタデータの JSON に項目を足すときは任意項目とし、ない場合は既定値で読む (既存の端末の credentials.bin を読めるようにする)。

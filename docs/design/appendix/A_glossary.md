@@ -11,7 +11,7 @@
 | CBOR | Concise Binary Object Representation (RFC 8949)。CTAP2 のメッセージ形式 |
 | Class 3 生体認証 (BIOMETRIC_STRONG) | Android の生体認証の強度区分のうち最も強いもの。Keystore 鍵の認証に使える |
 | clientDataHash | クライアントデータ (チャレンジ・オリジン等) の SHA-256。署名対象に含まれる |
-| clientPIN | CTAP の PIN によるユーザー検証機能。本アプリは非対応 (authenticatorClientPIN コマンドのうち鍵交換と内蔵 UV によるトークンの発行のみ対応) |
+| clientPIN | CTAP の PIN によるユーザー検証機能。クライアント (OS・ブラウザ) が PIN を設定・変更し、PIN でトークンを得る |
 | credProtect | credential の保護レベル (1〜3) を指定する CTAP 2.1 の拡張。レベル 2・3 は UV なしの認証で使えない |
 | credentialManagement | クライアントから認証器の discoverable credential を列挙・削除・更新する CTAP 2.1 のコマンド |
 | COSE_Key | CBOR Object Signing and Encryption (RFC 9052/9053) 形式の公開鍵 |

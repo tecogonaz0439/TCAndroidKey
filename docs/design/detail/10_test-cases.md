@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-10 |
-| 版数 | 1.6 |
+| 版数 | 1.7 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.7 (2026-11-05): clientPIN の単体テスト (UT-157〜167)、CT-09、IT-36・IT-37 を追加。UT-10・UT-123・CT-07 を更新 |
 | 改訂 | 1.6 (2026-11-05): CTAP 2.1 の単体テスト (UT-132〜156)、CT-07・CT-08 を追加。UT-10・UT-123・UT-128・CT-01・§4 を更新 |
 | 改訂 | 1.5 (2026-11-05): hmac-secret の単体テスト (UT-123〜131)、CT-06 を追加。UT-10・UT-107・CT-05 を更新 |
 | 改訂 | 1.4 (2026-11-05): PIN/UV Auth Protocol の単体テスト (UT-112〜122) を追加。UT-107・CT-05 に Protocol 1 / 2 の照合を追加 |
@@ -15,7 +16,7 @@
 
 ## 1. 単体テスト (UT)
 
-実行: `./gradlew :fido-core:test testDebugUnitTest` (計 156 件: fido-core 152 件、app 4 件。うち UT-107・UT-156 は環境変数指定時のみ実行。2026-11-05 時点で全件成功)
+実行: `./gradlew :fido-core:test testDebugUnitTest` (計 167 件: fido-core 163 件、app 4 件。うち UT-107・UT-156 は環境変数指定時のみ実行。2026-11-05 時点で全件成功)
 
 ### 1.1 CBOR (`CborTest`)
 
@@ -38,7 +39,7 @@
 
 | ID | テスト | 確認内容 | 要件 |
 |---|---|---|---|
-| UT-10 | getInfoAdvertisesFido20And21WithBuiltInUv | versions `["FIDO_2_0", "FIDO_2_1"]`、AAGUID、options (rk/uv/plat、pinUvAuthToken・credMgmt・makeCredUvNotRqd、clientPin なし)、extensions `["credProtect", "hmac-secret"]`、pinUvAuthProtocols `[2, 1]` | FR-06, FR-21〜24 |
+| UT-10 | getInfoAdvertisesFido20And21WithBuiltInUvAndClientPin | versions `["FIDO_2_0", "FIDO_2_1"]`、AAGUID、options (rk/uv/plat、pinUvAuthToken・credMgmt・makeCredUvNotRqd、PIN 未設定の clientPin false)、minPINLength 4、extensions `["credProtect", "hmac-secret"]`、pinUvAuthProtocols `[2, 1]` | FR-06, FR-21〜25 |
 | UT-11 | makeCredentialThenGetAssertionWithAllowListVerifiesSignature | 登録 → allowList 認証。rpIdHash、フラグ、AAGUID、COSE 鍵、カウンタ、**署名を公開鍵で検証** | FR-04, FR-05 |
 | UT-12 | selfAttestationIsSignedByCredentialKey | packed 自己アテステーションの署名検証 | FR-16 |
 | UT-13 | discoverableCredentialsAreEnumeratedWithGetNextAssertion | パスキー 2 件の列挙、numberOfCredentials、user 情報、別 RP の除外 | FR-05 |
@@ -200,7 +201,7 @@
 
 | ID | テスト | 確認内容 | 要件 |
 |---|---|---|---|
-| UT-123 | getKeyAgreementReturnsACoseKeyAndRejectsInvalidRequests | getKeyAgreement の COSE_Key (Protocol 1 / 2)。Protocol 3 は `0x02`、欠落 `0x14`、型不正 `0x11`、他のサブコマンド `0x3E`。認可を求めない | FR-21, SEC-10 |
+| UT-123 | getKeyAgreementReturnsACoseKeyAndRejectsInvalidRequests | getKeyAgreement の COSE_Key (Protocol 1 / 2)。Protocol 3 は `0x02`、欠落 `0x14`、型不正 `0x11`、getUVRetries (0x07)・未定義 (0x08) は `0x3E`。認可を求めない | FR-21, SEC-10 |
 | UT-124 | makeCredentialReportsTheExtensionOnlyWhenRequested | `true` で ED と `{"hmac-secret": true}`、なし・`false` では出力も CredRandom もない、真偽値以外は `0x11` | FR-21 |
 | UT-125 | getAssertionReturnsEncryptedOutputsForOneOrTwoSalts | salt 1 つ / 2 つの出力をプラットフォーム側で復号し `HMAC(CredRandomWithUV, salt)` と一致。ED が立ち、署名は拡張を含む authData で検証できる | FR-21 |
 | UT-126 | outputsAreDeterministicPerSaltAndDifferWithoutUv | 同じ salt で同じ出力。UV なしの認証では CredRandomWithoutUV の出力 (UV ありと異なる) | FR-21 |
@@ -255,6 +256,22 @@
 |---|---|---|---|
 | UT-156 | serve | 環境変数 `TCSKE_INTEROP_PORT` 指定時のみ、実際の `AuthorizationGate` (ワンタイム ON。消費後に自動で再開) を使う認証器を TCP で公開する。終了時に「UP を伴う登録・認証の成功回数 = ワンタイムの消費回数」を確認する (CT-07) | FR-13, FR-21〜24 |
 
+### 1.17 clientPIN (`ClientPinTest`)
+
+| ID | テスト | 確認内容 | 要件 |
+|---|---|---|---|
+| UT-157 | setPinIsReportedInGetInfoAndCannotBeSetTwice | Protocol 1 / 2 で PIN を設定し clientPin が true、残り 8 回。受付ゲート (`CLIENT_PIN`) を経てワンタイムは消費しない。再度の設定は `0x33` | FR-25, FR-13 |
+| UT-158 | newPinsAreValidated | 3 文字・64 バイト・不正な UTF-8 は `0x37`、パディング長の不正 `0x02`、認証値の不一致 `0x33`、欠落 `0x14`。4 コードポイント (12 バイト) は可 | FR-25, SEC-10 |
+| UT-159 | pinTokensAuthorizeOperations | 未設定で `0x35`。getPinToken (Protocol 1 / 2、mc・ga) で登録 (UV フラグ)、permissions 付きの getPinToken は `0x02`。0x09 の cm トークンで資格情報の管理、permissions 0 は `0x02`、lbw は `0x40` | FR-25, FR-22, FR-24 |
+| UT-160 | threeConsecutiveMismatchesRequireAPowerCycle | 誤り 1・2 回目 `0x31`、3 回目 `0x34`。以後は正しい PIN でも `0x34` で回数を減らさない。セッションの変化で解除、正しい PIN で 8 回に戻る | FR-25, SEC-02 |
+| UT-161 | eightMismatchesBlockThePinUntilReset | 8 回の誤りで `0x32`、以後はトークン・変更とも `0x32`。Reset で PIN が消え、再設定できる | FR-25, FR-10 |
+| UT-162 | changePinReplacesThePinAndRevokesTokens | 未設定 `0x35`、認証値の不一致 `0x33`、現在の PIN の誤り `0x31`、新しい PIN の違反 `0x37`。変更後は旧 PIN が `0x31`、発行済みのトークンは使えない | FR-25 |
+| UT-163 | zeroLengthProbeReportsPinInvalidOncePinIsSet | 長さ 0 の pinUvAuthParam は PIN 未設定で `0x35`、設定済みで `0x31` | FR-25 |
+| UT-164 | pinChecksRequireTheGateAndDoNotSpendRetriesWhenDenied | 受付ゲートの拒否 (`0x27`) では PIN を照合せず、試行回数を減らさない | FR-25, SEC-02, SEC-04 |
+| UT-165 | builtInUvStillWorksWithAPinSet | PIN 設定後も内蔵 UV のトークン・`uv` オプションで登録できる | FR-22, FR-25 |
+| UT-166 | pinStoreIsSharedAcrossTransports | 2 つの認証器 (トランスポート) で PIN の状態と試行回数を共有する | FR-25 |
+| UT-167 | unreadablePinStorageIsTreatedAsSetAndRejectsPinOperations | 読み込めない PIN は clientPin true、PIN の操作は `0x7F`、長さ 0 のプローブは `0x31` | FR-25, SEC-10 |
+
 ## 2. CTAP 結合試験 (CT)
 
 `scripts/test/fido2_nfc_test.py` (python-fido2 + PC/SC) を ENV-01 / ENV-02 で実行する。
@@ -267,8 +284,9 @@
 | CT-04 | 本人確認せずに `--info` | デバイスが見つからない (SELECT 拒否)、端末に本人確認ダイアログ | FR-15, SEC-04 |
 | CT-05 | 実機なし: `TCSKE_INTEROP_OUT=… ./gradlew :fido-core:test --tests '*InteropVectorExport*' --rerun` → `python3 scripts/test/verify_interop_vectors.py …` | python-fido2 が GetInfo を解析し、packed 自己アテステーション (SELF) とアサーションの署名を検証できる。PIN/UV Auth Protocol 1 / 2 について、`PinProtocolV1` / `PinProtocolV2` で導出した共有鍵で認証器の暗号文を復号でき、HMAC が一致する。hmac-secret について、登録の拡張出力、ED フラグ付きのアサーションの署名、復号した 2 つの出力が `HMAC(CredRandom, salt)` に一致する (2026-11-05、python-fido2 2.0.0 で確認済み) | FR-04〜06, FR-16, FR-21 |
 | CT-06 | 本人確認後に `--hmac-secret` を実行 (登録 → 認証 → hmac-secret の認証 2 回。ワンタイム ON の場合は都度本人確認) | 登録の拡張出力が `{"hmac-secret": true}`、SC-02 にチップ「hmac-secret (PRF)」。認証で 64 バイトの出力を復号でき、2 回の認証で同じ値 | FR-21 |
-| CT-07 | 実機なし: `TCSKE_INTEROP_PORT=47777 ./gradlew :fido-core:test --tests '*InteropServer*' --rerun -i` → `python3 scripts/test/interop_client_e2e.py <host> 47777` (docs/TESTING.md §7.1) | python-fido2 の `Fido2Client` で UV 必須・パスキー・PRF・credProtect 3 の登録 (内蔵 UV の pinUvAuthToken)、PRF の出力が同じ salt で一致し異なる salt で異なる、`CredentialManagement` で件数・列挙・ユーザー情報の更新・削除。サーバの消費回数が UP を伴う登録・認証の回数 (4) と一致 (2026-11-05、python-fido2 2.0.0 で確認済み) | FR-13, FR-21〜24 |
-| CT-08 | 本人確認後に `--client` を実行 (操作ごとに本人確認) | CT-07 と同じシナリオが実機の NFC で成功する | FR-01, FR-21〜24 |
+| CT-07 | 実機なし: `TCSKE_INTEROP_PORT=47777 ./gradlew :fido-core:test --tests '*InteropServer*' --rerun -i` → `python3 scripts/test/interop_client_e2e.py <host> 47777` (docs/TESTING.md §7.1) | python-fido2 の `Fido2Client` で UV 必須・パスキー・PRF・credProtect 3 の登録 (内蔵 UV の pinUvAuthToken)、PRF の出力が同じ salt で一致し異なる salt で異なる、`CredentialManagement` で件数・列挙・ユーザー情報の更新・削除。続けて clientPIN (PIN の設定、誤りと残り回数、PIN の cm トークン、PIN の変更、PIN を使う `Fido2Client` の登録・認証)。サーバの消費回数が UP を伴う登録・認証の回数 (6) と一致 (2026-11-05、python-fido2 2.0.0 で確認済み) | FR-13, FR-21〜25 |
+| CT-08 | 本人確認後に `--client` を実行 (操作ごとに本人確認) | CT-07 の PIN 以外のシナリオが実機の NFC で成功する | FR-01, FR-21〜24 |
+| CT-09 | PIN 未設定の状態で、本人確認後に `--pin` を実行 (操作ごとに本人確認) | CT-07 の clientPIN のシナリオが実機の NFC で成功する。終了後は SC-04 に「設定済み (残り 8 回)」。「PIN を消去」で未設定に戻る | FR-25, FR-26 |
 
 python-fido2 は 2.0.0 を基準とする (`pip install "fido2[pcsc]==2.0.0"`)。試験スクリプトは低水準 API (`Ctap2`) を使い、
 内蔵 UV を `options={"uv": True}` で直接指定する。高水準 API (`Fido2Client`) は CT-07 / CT-08 で確認する。
@@ -314,6 +332,8 @@ python-fido2 は 2.0.0 を基準とする (`pip install "fido2[pcsc]==2.0.0"`)�
 | IT-33 | 言語設定 | SC-04「言語」→ OS の画面で English → 戻る → 日本語 → システムのデフォルト | 表示が切り替わり、説明行が選択に合う。受付中だった場合は受付が解除される | FR-19, NFR-07 |
 | IT-34 | 注意書き | アプリのデータを消去して起動 → 戻る・外側タップ → [理解しました] → 再起動 | DL-03 は [理解しました] まで閉じない。再起動後は表示されない。SC-01・SC-04・SC-05 に注意書きのカードは表示されない | FR-20 |
 | IT-35 | 利用規約・セキュリティポリシー | SC-05 →「利用規約」「セキュリティポリシー」、文書内のリンク (セキュリティポリシー、LICENSE、メール) を押す。英語表示でも確認 | 表示言語の版が開き、表・太字・リンクが崩れない。文書間のリンクはアプリ内、LICENSE は GitHub、メールはメールアプリで開く。英語表示では日本語版の項目も表示される | FR-20 |
+| IT-36 | PIN の表示と消去 | CT-09 の後に SC-04「PIN」を確認 →「PIN を消去」(本人確認) → 再度 `--info` | 「設定済み (残り 8 回)」→ 消去後は「未設定」、clientPin が false。クレデンシャルは残る。本人確認を取り消すと消去しない | FR-26, SEC-09 |
+| IT-37 | OS からの PIN の設定・変更 | Windows の「設定 → アカウント → サインイン オプション → セキュリティ キー → 管理」で PIN を追加・変更する (本人確認後にかざす) | PIN を設定・変更できる。誤った現在の PIN では変更できず、SC-04 の残り回数が減る | FR-25 |
 
 ## 4. 互換性マトリクス (CP)
 
@@ -357,8 +377,10 @@ UV 必須の登録・認証が成功する (2026-11-05、CT-07)。
 | FR-21 | UT-10, 107, 123〜131, 156, CT-05〜08 |
 | FR-22 | UT-10, 132〜140, 156, CT-07, CT-08 |
 | FR-23 | UT-10, 141〜146, 150, CT-07, CT-08 |
-| FR-24 | UT-10, 147〜155, CT-07, CT-08 |
+| FR-24 | UT-10, 147〜155, 159, CT-07, CT-08 |
+| FR-25 | UT-10, 157〜167, CT-07, CT-09, IT-37 |
+| FR-26 | CT-09, IT-36 |
 | NFR-03 / 04 / 07 / 09 / 10 | IT-22 / IT-15 / IT-20 / IT-21, 30 / IT-19 |
 | (品質: アクセシビリティ) | IT-29 |
 | SEC-02〜SEC-04 | UT-17, 26, 64, 65, 75, 77〜79, 81, 85, 133, 135, 139, 151, IT-07, 08, 11, 16, 24, 25 |
-| SEC-07 / SEC-09 / SEC-10 | IT-18 / IT-10, 12, 13 / UT-05〜07, 09, 22, 36, 38, 40〜42, 48, 49, 54, 84, 92〜94, 116, 120, 121, 123, 128, 134, 136, 148 |
+| SEC-07 / SEC-09 / SEC-10 | IT-18 / IT-10, 12, 13, 36 / UT-05〜07, 09, 22, 36, 38, 40〜42, 48, 49, 54, 84, 92〜94, 116, 120, 121, 123, 128, 134, 136, 148, 158, 167 |

@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-06 |
-| 版数 | 1.4 |
+| 版数 | 1.5 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.5 (2026-11-05): clientPIN の保存 (`pin.bin`、§3.4) を追加。§5 に `fido_hmac_`・PIN の暗号鍵を追加し、全削除でメタデータ暗号鍵も削除する記述に訂正 |
 | 改訂 | 1.4 (2026-11-05): `credProtect` 項目を追加。credentialManagement によるユーザー情報の更新を追記 |
 | 改訂 | 1.3 (2026-11-05): hmac-secret の HMAC 鍵と `hmacSecret` 項目を追加 |
 | 改訂 | 1.2 (2026-11-02): 設定 `notice_acknowledged` を追加、言語の保存先を明記 |
@@ -19,6 +20,8 @@
 | 秘密鍵 (クレデンシャル毎) | Android Keystore | EC P-256 鍵エントリ | ○ | 対象外 |
 | hmac-secret の HMAC 鍵 (hmac-secret 付きのクレデンシャル毎) | Android Keystore | HMAC-SHA256 鍵エントリ | ○ | 対象外 |
 | メタデータ暗号鍵 | Android Keystore | AES-256 鍵エントリ | ○ | 対象外 |
+| PIN の暗号鍵 | Android Keystore | AES-256 鍵エントリ (`tcsecuritykeyemulator_pin_v1`) | ○ | 対象外 |
+| PIN (ハッシュと試行回数) | `filesDir/pin.bin` | AES-GCM 暗号化 JSON (§3.4) | ○ | 対象外 |
 | クレデンシャルのメタデータ | `filesDir/credentials.bin` | AES-GCM 暗号化 JSON | ○ | 対象外 |
 | 設定 | SharedPreferences `settings` | キー・値 | ○ | 対象外 |
 | イベントログ | メモリ | リスト (最大 300 件) | × | — |
@@ -109,6 +112,21 @@ root / file / database / sharedpref / external をすべて除外。
   (アプリ専用領域のファイルを書き換えられる攻撃者を想定外とする。BD-05 T-04)。
 - 更新は新しいスナップショットを作って保存し、保存に成功してからキャッシュ・UI へ反映する (保存失敗時にメモリとファイルが食い違わない)。
 
+
+### 3.4 PIN ファイル (`pin.bin`)
+
+形式は §3.1 と同じ (GCM IV 12 バイト ‖ 暗号文 ‖ タグ)。暗号鍵は Keystore エイリアス `tcsecuritykeyemulator_pin_v1` (ユーザー認証不要)。
+
+```json
+{"hash": "<LEFT(SHA-256(PIN), 16) の hex 32 文字>", "retries": 8}
+```
+
+| 状態 | 扱い |
+|---|---|
+| ファイルがない | PIN 未設定 |
+| 読める | PIN 設定済み。`hash` が 16 バイト、`retries` が 0〜8 でなければ読めないものとして扱う |
+| ファイルがあるが読めない (暗号鍵がない、GCM タグ不一致、JSON 不正) | 空として扱わない。UNAVAILABLE とし、PIN の操作を拒否する (DD-01 §13.1)。アプリの「PIN を消去」でファイルと暗号鍵を削除して初期化する |
+
 ## 4. 設定 (SharedPreferences `settings`)
 
 | キー | 型 | 既定値 | 値の範囲 | 内容 |
@@ -133,9 +151,13 @@ root / file / database / sharedpref / external をすべて除外。
 | エイリアス | 種別 | 用途 |
 |---|---|---|
 | `fido_cred_<credentialId の hex>` | EC P-256 (署名) | クレデンシャル秘密鍵 |
+| `fido_hmac_<credentialId の hex>` | HMAC-SHA256 (署名) | hmac-secret の CredRandom の導出 (DD-07 §6) |
 | `tcsecuritykeyemulator_metadata_v1` | AES-256 (暗号化) | メタデータ暗号鍵 |
+| `tcsecuritykeyemulator_pin_v1` | AES-256 (暗号化) | PIN の暗号鍵 (§3.4) |
 
-全削除は `fido_cred_` で始まるエイリアスをすべて削除する (メタデータ暗号鍵は残す)。
+いずれも変更しない識別子 (変えると既存の端末の鍵・データを使えなくなる)。
+全削除は `fido_cred_`・`fido_hmac_` で始まるエイリアスをすべて削除し、メタデータ暗号鍵とメタデータファイルも削除する
+(次回の保存で作り直す。DD-07 §5)。PIN の暗号鍵と PIN ファイルも削除する (DD-07 §7)。
 
 ## 6. イベントログ (LogEntry)
 

@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-04 |
-| 版数 | 1.4 |
+| 版数 | 1.5 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.5 (2026-11-05): `PinStore`・`InMemoryPinStore`・`KeystorePinStore`、`ClientPin` の PIN 関連サブコマンドを追加 |
 | 改訂 | 1.4 (2026-11-05): `CredentialManagement`・`CredProtect`、`ClientPin` の pinUvAuthToken、`CredentialStore.updateUser`、`CtapOperation` の追加 |
 | 改訂 | 1.3 (2026-11-05): `ClientPin`・`HmacSecret`・`CredentialOptions`、`CredentialStore.credRandom` を追加 |
 | 改訂 | 1.2 (2026-11-05): `fido.pin` パッケージ (PIN/UV Auth Protocol) を追加 |
@@ -114,7 +115,9 @@ classDiagram
 | `Ctap2Authenticator` | CTAP2 コマンド処理 (DD-01)。1 トランスポートに 1 インスタンス (GetNextAssertion 状態を保持)。`process` は `@Synchronized`、`resetSession` はブロックしない (`@Volatile`)。時計は wall clock (イベント) と単調時計 (GetNextAssertion) を注入できる |
 | `CredentialStore` | 鍵保管の抽象 (スレッドセーフであること)。`create(…, options)`、`credRandom(credential, userVerified)` (hmac-secret。CredRandom がなければ null)、`updateUser(id, user)` (credentialManagement) |
 | `CredentialOptions` | 登録時の属性 (`hmacSecret`、`credProtect`) |
-| `ClientPin` | authenticatorClientPIN (0x06。getKeyAgreement、getPinUvAuthTokenUsingUvWithPermissions)、プロトコルごとの `PinUvAuthProtocol` と pinUvAuthToken の状態 (DD-01 §12.1)。`verifyForOperation` (MC / GA)、`verifyForCredentialManagement`、`onUserPresentOperation` (使用後の権限の消去)、`isTokenInUse`、`reset()` (Reset 時)。時計とセッションの世代を注入する |
+| `ClientPin` | authenticatorClientPIN (0x06。DD-01 §11.1、§13)、PIN の照合と連続の誤りの管理、プロトコルごとの `PinUvAuthProtocol` と pinUvAuthToken の状態 (DD-01 §12.1)。`verifyForOperation` (MC / GA)、`verifyForCredentialManagement`、`onUserPresentOperation` (使用後の権限の消去)、`isTokenInUse`、`reset()` (Reset 時)。時計とセッションの世代を注入する |
+| `PinStore` / `PinStatus` / `PinCheck` | clientPIN の保存の抽象 (DD-01 §13.1)。全トランスポートで共有するためスレッドセーフであること。`status`、`setPin`、`check` (回数を減らしてから照合)、`changePin`、`clear` |
+| `InMemoryPinStore` | メモリ上の `PinStore` (単体テスト・`Ctap2Authenticator` の既定値) |
 | `CredentialManagement` | authenticatorCredentialManagement (0x0A。DD-01 §12.4)。列挙の途中状態を持ち、他のコマンドで破棄する |
 | `CredProtect` | credProtect 拡張 (DD-01 §12.3)。登録の要求の解釈と、認証での絞り込み |
 | `HmacSecret` / `HmacSecretInput` | hmac-secret 拡張 (DD-01 §11.2)。登録の要求の判定、認証の入力の検証と salt の復号、出力の暗号化 |
@@ -169,7 +172,7 @@ classDiagram
 | クラス | 責務 |
 |---|---|
 | `TCSecurityKeyEmulatorApp` | Application。`AppContainer` を生成 |
-| `AppContainer` | 手動 DI。`SettingsRepository`、`EventLogRepository`、`KeystoreCredentialStore`、`AuthSessionManager`、`BluetoothHidAuthenticator` (遅延生成)、AAGUID 定数、`newAuthenticator(transport, transports, policy)` |
+| `AppContainer` | 手動 DI。`SettingsRepository`、`EventLogRepository`、`KeystoreCredentialStore`、`KeystorePinStore` (全認証器で共有)、`AuthSessionManager`、`BluetoothHidAuthenticator` (遅延生成)、AAGUID 定数、`newAuthenticator(transport, transports, policy)` |
 | `Context.appContainer` | コンテナ取得の拡張プロパティ |
 | `MainActivity` | 唯一の Activity。ライフサイクル連携 (BD-03 §4.4)、`UiActions` の実装、本人確認要求の購読、`FLAG_SECURE`、Bluetooth 権限要求 |
 
@@ -189,6 +192,7 @@ classDiagram
 |---|---|
 | `KeystoreCredentialStore` | `CredentialStore` の Android Keystore 実装 (DD-07)。保存済みと一致する不変スナップショット + `StateFlow<List<StoredCredential>>` (UI 用)、`StateFlow<StorageStatus>` (読み込み状態)。読み込み時に鍵が存在しないメタデータを除去。読み込めない場合は UNAVAILABLE (DD-07 §5) |
 | `MetadataStore` (internal) | メタデータの暗号化保存 (DD-06 §3) |
+| `KeystorePinStore` | `PinStore` の Android 実装 (DD-07 §7)。`files/pin.bin` を Keystore の AES-GCM 鍵で暗号化。`StateFlow<PinStatus>` (UI 用) |
 
 ### 3.4 `nfc` / `bluetooth`
 

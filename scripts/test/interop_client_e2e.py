@@ -15,6 +15,8 @@ fido-core の InteropServer (JUnit) が TCP で認証器を公開し、このス
     1. Fido2Client で UV 必須・パスキー必須・PRF・credProtect (UV 必須) の登録 (内蔵 UV の pinUvAuthToken を使う)
     2. Fido2Client で PRF 付きの認証を 2 回行い、同じ salt で同じ値、異なる salt で異なる値になること
     3. ClientPin.get_uv_token (cm 権限) と CredentialManagement による件数・RP・credential の列挙、ユーザー情報の更新、削除
+    4. clientPIN: PIN の設定、誤った PIN と残り回数、PIN によるトークン (mc・ga / cm)、PIN の変更、PIN を求める Fido2Client の登録・認証
+       (run_pin_scenario。PIN を設定するため最後に行う)
 """
 import os
 import socket
@@ -86,10 +88,25 @@ class NoPinInteraction(UserInteraction):
     """内蔵 UV のみを使う (PIN は求めない)。"""
 
     def request_pin(self, permissions, rp_id):
-        sys.exit("unexpected PIN request: the authenticator has no clientPIN")
+        sys.exit("unexpected PIN request: the PIN is not set")
 
     def request_uv(self, permissions, rp_id):
         return True
+
+
+class PinOnlyInteraction(UserInteraction):
+    """内蔵 UV を断り、PIN で UV する。"""
+
+    def __init__(self, pin):
+        self.pin = pin
+        self.pin_requests = 0
+
+    def request_pin(self, permissions, rp_id):
+        self.pin_requests += 1
+        return self.pin
+
+    def request_uv(self, permissions, rp_id):
+        return False
 
 
 def prf_first(extension_results):
@@ -195,12 +212,76 @@ def run_scenario(connect):
     print("CredentialManagement: metadata, enumerate RPs / credentials, update user, delete OK")
 
 
+def run_pin_scenario(connect, pin="1234", new_pin="56789"):
+    """
+    clientPIN を確認する。PIN を設定するため、認証器の PIN が未設定の状態で最後に実行する。
+    実行後は new_pin が設定されたまま残る (実機ではアプリの設定画面の「PIN を消去」で消せる)。
+    """
+    ctap = Ctap2(connect("PIN を設定します (ワンタイムは消費しません)。"))
+    if ctap.info.options.get("clientPin") is not False:
+        sys.exit(f"clientPin must be false before the PIN scenario: {ctap.info.options}")
+    client_pin = ClientPin(ctap)
+    client_pin.set_pin(pin)
+    if Ctap2(ctap.device).get_info().options.get("clientPin") is not True:
+        sys.exit("clientPin is not true after setPIN")
+    try:
+        client_pin.get_pin_token("0000")
+        sys.exit("a wrong PIN was accepted")
+    except CtapError as e:
+        if e.code != CtapError.ERR.PIN_INVALID:
+            sys.exit(f"wrong PIN: unexpected error {e.code!r}")
+    retries, _ = client_pin.get_pin_retries()
+    if retries != 7:
+        sys.exit(f"pinRetries after one mismatch: {retries}")
+    token = client_pin.get_pin_token(pin, ClientPin.PERMISSION.CREDENTIAL_MGMT)
+    credman = CredentialManagement(ctap, client_pin.protocol, token)
+    print(f"clientPIN: setPIN, wrong PIN (retries 7), PIN token with cm -> metadata {dict(credman.get_metadata())}")
+    if client_pin.get_pin_retries()[0] != 8:
+        sys.exit("pinRetries was not reset by the correct PIN")
+    client_pin.change_pin(pin, new_pin)
+    try:
+        client_pin.get_pin_token(pin)
+        sys.exit("the old PIN still works after changePIN")
+    except CtapError:
+        pass
+
+    # PIN で UV する Fido2Client (内蔵 UV を断る)
+    interaction = PinOnlyInteraction(new_pin)
+    client = Fido2Client(connect("PIN による登録を行います。"), DefaultClientDataCollector(ORIGIN), interaction)
+    reg = client.make_credential(
+        PublicKeyCredentialCreationOptions(
+            rp=PublicKeyCredentialRpEntity(name="E2E", id=RP_ID),
+            user=PublicKeyCredentialUserEntity(name="pin@example.com", id=os.urandom(16), display_name="PIN"),
+            challenge=os.urandom(32),
+            pub_key_cred_params=[PublicKeyCredentialParameters(type=PublicKeyCredentialType.PUBLIC_KEY, alg=-7)],
+            authenticator_selection=AuthenticatorSelectionCriteria(
+                resident_key=ResidentKeyRequirement.REQUIRED,
+                user_verification=UserVerificationRequirement.REQUIRED,
+            ),
+        )
+    )
+    if not reg.response.attestation_object.auth_data.is_user_verified():
+        sys.exit("MakeCredential with PIN: UV flag is not set")
+    client = Fido2Client(connect("PIN による認証を行います。"), DefaultClientDataCollector(ORIGIN), interaction)
+    selection = client.get_assertion(
+        PublicKeyCredentialRequestOptions(
+            challenge=os.urandom(32), rp_id=RP_ID, user_verification=UserVerificationRequirement.REQUIRED
+        )
+    )
+    if not selection.get_response(0).response.authenticator_data.is_user_verified():
+        sys.exit("GetAssertion with PIN: UV flag is not set")
+    if interaction.pin_requests < 2:
+        sys.exit(f"Fido2Client did not use the PIN ({interaction.pin_requests} requests)")
+    print(f"clientPIN: changePIN, Fido2Client registration and assertion with the PIN ({interaction.pin_requests} PIN requests) OK")
+
+
 def main():
     host, port = sys.argv[1], int(sys.argv[2])
     dev = SocketDevice(host, port)
     try:
         # InteropServer はワンタイムの消費後に自動で受付を再開するため、同じ接続を使い続ける
         run_scenario(lambda prompt: dev)
+        run_pin_scenario(lambda prompt: dev)
         print("OK")
     finally:
         dev.close()

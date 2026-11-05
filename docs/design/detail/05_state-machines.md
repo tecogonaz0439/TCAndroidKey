@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-05 |
-| 版数 | 1.2 |
+| 版数 | 1.3 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.3 (2026-11-05): §2.5 に PIN の操作を追加 |
 | 改訂 | 1.2 (2026-11-05): §2.5 pinUvAuthToken と受付ゲートの関係を追加 |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応。認可を全トランスポート共有の `AuthorizationGate` に集約し、Lease・取消トークン・接続世代を導入 (`review/FIX_PLAN.md`) |
 | 実装 | `fido-core/.../session/AuthorizationGate.kt`, `app/.../auth/AuthSessionManager.kt`, `MainActivity.kt`, `bluetooth/BluetoothHidAuthenticator.kt`, `fido-core/.../nfc/NfcCtapProcessor.kt`, `app/.../nfc/FidoHostApduService.kt` |
@@ -123,6 +124,8 @@ CTAP 2.1 の pinUvAuthToken (DD-01 §12.1) は、受付ゲートの認可を置�
 | 操作 | 認可 | ワンタイム |
 |---|---|---|
 | トークンの発行 (ClientPIN 0x06) | `PIN_UV_AUTH_TOKEN` (UV 要)。受付外なら NFC は拒否、Bluetooth は本人確認を待つ | 消費しない (`complete(false)`) |
+| PIN によるトークンの発行 (ClientPIN 0x05 / 0x09) | `PIN_UV_AUTH_TOKEN`。認可を得てから PIN を照合する (受付外では試行回数を減らさない) | 消費しない |
+| PIN の設定・変更 (ClientPIN 0x03 / 0x04) | `CLIENT_PIN` | 消費しない |
 | トークンを使う登録・UP を伴う認証 | `MAKE_CREDENTIAL` / `GET_ASSERTION` | 消費する |
 | トークンを使う silent assertion | `GET_ASSERTION` (UP なし) | 消費しない |
 | 資格情報の管理 (CredentialManagement 0x0A) | `CREDENTIAL_MANAGEMENT`。列挙の続きは開始時の Lease で継続 | 消費しない |

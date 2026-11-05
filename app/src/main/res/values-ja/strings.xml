@@ -74,6 +74,17 @@
     <string name="credential_discoverable">パスキー (検出可能)</string>
     <string name="credential_non_discoverable">非検出 (サーバー側保持)</string>
     <string name="credential_hmac_secret">hmac-secret (PRF)</string>
+    <string name="settings_category_pin">PIN (clientPIN)</string>
+    <string name="settings_pin_status">PIN</string>
+    <string name="settings_pin_not_set">未設定 (OS・ブラウザから設定します)</string>
+    <plurals name="settings_pin_set">
+        <item quantity="other">設定済み (残り %1$d 回)</item>
+    </plurals>
+    <string name="settings_pin_blocked">ブロック中 (残り 0 回)。PIN の消去またはリセットで解除します</string>
+    <string name="settings_pin_unavailable">読み込めません。PIN の消去で初期化できます</string>
+    <string name="settings_pin_clear">PIN を消去</string>
+    <string name="settings_pin_clear_help">登録済みのクレデンシャルは残ります</string>
+    <string name="settings_pin_help">PIN はクライアント (OS・ブラウザ) から設定・変更します。本アプリでは状態の表示と消去のみ行います。</string>
     <string name="credential_cred_protect_list">credProtect 2: UV または ID 指定</string>
     <string name="credential_cred_protect_required">credProtect 3: UV 必須</string>
     <string name="security_level_strongbox">StrongBox</string>
@@ -100,6 +111,7 @@
     <string name="verify_title_delete">クレデンシャル削除のために本人確認</string>
     <string name="verify_title_delete_all">全クレデンシャル削除のために本人確認</string>
     <string name="verify_title_change_setting">設定変更のために本人確認</string>
+    <string name="verify_title_clear_pin">PIN 消去のために本人確認</string>
     <string name="verify_subtitle">セキュリティキーエミュレータ</string>
     <string name="msg_no_lock_screen">先に画面ロックを設定してください。</string>
     <string name="msg_no_strong_biometric">強力な (Class 3) 生体認証が登録されていません。</string>

@@ -66,7 +66,7 @@ class Ctap2AuthenticatorTest {
     }
 
     @Test
-    fun getInfoAdvertisesFido20And21WithBuiltInUv() {
+    fun getInfoAdvertisesFido20And21WithBuiltInUvAndClientPin() {
         val (status, info) = call(CtapCommand.GET_INFO)
         assertEquals(CtapStatus.OK, status)
         assertEquals(listOf("FIDO_2_0", "FIDO_2_1"), info!![1L])
@@ -75,7 +75,9 @@ class Ctap2AuthenticatorTest {
         assertEquals(true, options["rk"])
         assertEquals(true, options["uv"])
         assertEquals(false, options["plat"])
-        assertFalse(options.containsKey("clientPin"))
+        // PIN 未設定 (clientPin: false)。最小の長さは 4
+        assertEquals(false, options["clientPin"])
+        assertEquals(4L, info[0x0DL])
         assertEquals(true, options["pinUvAuthToken"])
         assertEquals(true, options["credMgmt"])
         assertEquals(true, options["makeCredUvNotRqd"])

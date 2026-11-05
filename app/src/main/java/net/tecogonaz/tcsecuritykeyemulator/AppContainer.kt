@@ -14,6 +14,7 @@ import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.AuthenticatorConfig
 import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.Ctap2Authenticator
 import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.Hex
 import net.tecogonaz.tcsecuritykeyemulator.keystore.KeystoreCredentialStore
+import net.tecogonaz.tcsecuritykeyemulator.keystore.KeystorePinStore
 
 /**
  * 手動 DI コンテナ。アプリプロセスにつき 1 つ。
@@ -24,6 +25,9 @@ class AppContainer(context: Context) {
     val settings = SettingsRepository(appContext)
     val eventLog = EventLogRepository()
     val credentialStore = KeystoreCredentialStore(appContext) { settings.current.preferStrongBox }
+
+    /** clientPIN の保存先。全トランスポートの認証器で共有する。 */
+    val pinStore = KeystorePinStore(appContext)
     val session = AuthSessionManager(settings, eventLog)
     val bluetooth: BluetoothHidAuthenticator by lazy { BluetoothHidAuthenticator(this) }
 
@@ -44,7 +48,8 @@ class AppContainer(context: Context) {
             policy = policy,
             configProvider = { authenticatorConfig(transports) },
             transportName = transport,
-            listener = { event -> eventLog.onAuthenticatorEvent(event) }
+            listener = { event -> eventLog.onAuthenticatorEvent(event) },
+            pinStore = pinStore
         )
 
     companion object {

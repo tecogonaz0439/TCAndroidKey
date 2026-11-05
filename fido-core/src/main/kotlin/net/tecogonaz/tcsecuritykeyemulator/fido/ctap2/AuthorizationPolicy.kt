@@ -8,8 +8,11 @@ package net.tecogonaz.tcsecuritykeyemulator.fido.ctap2
  *
  * - [PIN_UV_AUTH_TOKEN]: 内蔵 UV による pinUvAuthToken の発行 (ClientPIN 0x06)。ワンタイムは消費しない
  * - [CREDENTIAL_MANAGEMENT]: authenticatorCredentialManagement の各操作。ワンタイムは消費しない
+ * - [CLIENT_PIN]: PIN の設定・変更 (ClientPIN 0x03 / 0x04)。ワンタイムは消費しない
  */
-enum class CtapOperation { MAKE_CREDENTIAL, GET_ASSERTION, RESET, SELECTION, PIN_UV_AUTH_TOKEN, CREDENTIAL_MANAGEMENT }
+enum class CtapOperation {
+    MAKE_CREDENTIAL, GET_ASSERTION, RESET, SELECTION, PIN_UV_AUTH_TOKEN, CREDENTIAL_MANAGEMENT, CLIENT_PIN
+}
 
 /**
  * 認証器が操作の実行可否を問い合わせるための要求。

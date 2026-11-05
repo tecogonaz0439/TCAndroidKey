@@ -6,13 +6,19 @@ package net.tecogonaz.tcsecuritykeyemulator.fido.ctap2
 import net.tecogonaz.tcsecuritykeyemulator.fido.cbor.has
 import net.tecogonaz.tcsecuritykeyemulator.fido.pin.PinUvAuthProtocol
 import net.tecogonaz.tcsecuritykeyemulator.fido.pin.PinUvAuthProtocolException
+import java.nio.ByteBuffer
+import java.nio.charset.CharacterCodingException
 import java.security.SecureRandom
 
 /**
  * authenticatorClientPIN (0x06) と、PIN/UV Auth Protocol の状態 (鍵交換の鍵・pinUvAuthToken) の管理 (DD-01 §11.1、§12.1)。
  *
- * 対応するサブコマンドは getKeyAgreement (0x02) と getPinUvAuthTokenUsingUvWithPermissions (0x06)。
- * PIN には対応しない (GetInfo に clientPin を含めない)。内蔵 UV は [AuthorizationPolicy] (受付ゲート) の許可で代える。
+ * 対応するサブコマンド: getPINRetries (0x01)、getKeyAgreement (0x02)、setPIN (0x03)、changePIN (0x04)、getPinToken (0x05)、
+ * getPinUvAuthTokenUsingUvWithPermissions (0x06)、getPinUvAuthTokenUsingPinWithPermissions (0x09)。
+ * 内蔵 UV は [AuthorizationPolicy] (受付ゲート) の許可で代える。PIN の設定・変更とトークンの発行も、受付ゲートの許可を得てから行う
+ * (受付外に PIN を総当たりされないようにする)。PIN の保存は [PinStore] (全トランスポートで共有)。
+ *
+ * PIN の連続 3 回の誤りで、セッション (NFC では接続) が変わるまで PIN の照合を受け付けない (`0x34 PIN_AUTH_BLOCKED`)。
  *
  * pinUvAuthToken は次の場合に使えなくなる:
  * - 発行から [INITIAL_USAGE_LIMIT_MS] 以内に一度も使われない / 発行から [MAX_USAGE_PERIOD_MS] が経過した
@@ -27,7 +33,8 @@ class ClientPin(
     private val sessionEpoch: () -> Long = { 0L },
     /** 対応するプロトコルの番号 (GetInfo の pinUvAuthProtocols の順)。 */
     val supportedProtocols: List<Int> = SUPPORTED_PROTOCOLS,
-    private val random: SecureRandom = SecureRandom()
+    private val random: SecureRandom = SecureRandom(),
+    private val pinStore: PinStore = InMemoryPinStore()
 ) {
     private val protocols: Map<Int, PinUvAuthProtocol> =
         supportedProtocols.associateWith { PinUvAuthProtocol.create(it.toLong(), random)!! }
@@ -44,10 +51,18 @@ class ClientPin(
     private var tokenLease: AuthorizationLease = AuthorizationLease.UNBOUND
     private var tokenEpoch = 0L
 
-    /** 鍵交換の鍵とトークンを作り直す (Reset に相当)。 */
+    // ---------------------------------------------------------------- PIN の連続の誤り (電源の再投入 = セッションの変化で戻す)
+    private var consecutiveMismatches = 0
+    private var mismatchEpoch = 0L
+
+    /** PIN の状態 (GetInfo の clientPin、長さ 0 の pinUvAuthParam の応答に使う)。 */
+    fun pinStatus(): PinStatus = pinStore.status()
+
+    /** 鍵交換の鍵とトークンを作り直す (Reset に相当)。PIN の消去は呼び出し側で行う。 */
     fun reset() {
         protocols.values.forEach { it.regenerate() }
         resetTokens()
+        consecutiveMismatches = 0
     }
 
     /**
@@ -77,13 +92,190 @@ class ClientPin(
      * authenticatorClientPIN の処理。
      * @param authorize 内蔵 UV (受付ゲート) の認可。拒否時は例外を投げる。
      */
-    fun process(p: Map<*, *>, authorize: (AuthorizationRequest) -> AuthorizationResult.Granted): Map<Long, Any> {
+    fun process(p: Map<*, *>, authorize: (AuthorizationRequest) -> AuthorizationResult.Granted): Map<Long, Any>? {
         val version = p.requireLong(KEY_PIN_UV_AUTH_PROTOCOL)
         val subCommand = p.requireLong(KEY_SUB_COMMAND)
         return when (subCommand) {
+            SUB_GET_PIN_RETRIES -> {
+                protocol(version)
+                val status = availablePinStatus()
+                linkedMapOf(RESP_PIN_RETRIES to status.retries.toLong(), RESP_POWER_CYCLE_STATE to powerCycleRequired())
+            }
             SUB_GET_KEY_AGREEMENT -> linkedMapOf(RESP_KEY_AGREEMENT to protocol(version).getPublicKey())
+            SUB_SET_PIN -> setPin(p, version, authorize)
+            SUB_CHANGE_PIN -> changePin(p, version, authorize)
+            SUB_GET_PIN_TOKEN -> tokenUsingPin(p, version, authorize, withPermissions = false)
             SUB_GET_PIN_UV_AUTH_TOKEN_USING_UV -> tokenUsingUv(p, version, authorize)
+            SUB_GET_PIN_UV_AUTH_TOKEN_USING_PIN -> tokenUsingPin(p, version, authorize, withPermissions = true)
             else -> throw CtapException(CtapStatus.ERR_INVALID_SUBCOMMAND, "unsupported clientPIN subcommand $subCommand")
+        }
+    }
+
+    /** setPIN (CTAP 2.1 §6.5.5.5)。 */
+    private fun setPin(p: Map<*, *>, version: Long, authorize: (AuthorizationRequest) -> AuthorizationResult.Granted): Map<Long, Any>? {
+        val keyAgreement = p.requireMap(KEY_KEY_AGREEMENT)
+        val newPinEnc = p.requireBytes(KEY_NEW_PIN_ENC)
+        val param = p.requireBytes(KEY_PIN_UV_AUTH_PARAM)
+        val protocol = protocol(version)
+        if (availablePinStatus().state == PinStatus.State.SET) {
+            throw CtapException(CtapStatus.ERR_PIN_AUTH_INVALID, "PIN is already set")
+        }
+        val sharedSecret = sharedSecret(protocol, keyAgreement)
+        if (!protocol.verify(sharedSecret, newPinEnc, param)) throw CtapException(CtapStatus.ERR_PIN_AUTH_INVALID)
+        val newPinHash = decryptNewPin(protocol, sharedSecret, newPinEnc)
+        withAuthorization(CtapOperation.CLIENT_PIN, null, authorize) {
+            if (!pinStore.setPin(newPinHash)) throw CtapException(CtapStatus.ERR_PIN_AUTH_INVALID, "PIN is already set")
+        }
+        return null
+    }
+
+    /** changePIN (CTAP 2.1 §6.5.5.6)。 */
+    private fun changePin(p: Map<*, *>, version: Long, authorize: (AuthorizationRequest) -> AuthorizationResult.Granted): Map<Long, Any>? {
+        val keyAgreement = p.requireMap(KEY_KEY_AGREEMENT)
+        val pinHashEnc = p.requireBytes(KEY_PIN_HASH_ENC)
+        val newPinEnc = p.requireBytes(KEY_NEW_PIN_ENC)
+        val param = p.requireBytes(KEY_PIN_UV_AUTH_PARAM)
+        val protocol = protocol(version)
+        requirePinUsable()
+        val sharedSecret = sharedSecret(protocol, keyAgreement)
+        if (!protocol.verify(sharedSecret, newPinEnc + pinHashEnc, param)) throw CtapException(CtapStatus.ERR_PIN_AUTH_INVALID)
+        withAuthorization(CtapOperation.CLIENT_PIN, null, authorize) {
+            checkPin(protocol, sharedSecret, pinHashEnc)
+            pinStore.changePin(decryptNewPin(protocol, sharedSecret, newPinEnc))
+            resetTokens()
+        }
+        return null
+    }
+
+    /** getPinToken (0x05。2.0 用、権限は mc・ga) / getPinUvAuthTokenUsingPinWithPermissions (0x09。CTAP 2.1 §6.5.5.7.2)。 */
+    private fun tokenUsingPin(
+        p: Map<*, *>,
+        version: Long,
+        authorize: (AuthorizationRequest) -> AuthorizationResult.Granted,
+        withPermissions: Boolean
+    ): Map<Long, Any> {
+        val keyAgreement = p.requireMap(KEY_KEY_AGREEMENT)
+        val pinHashEnc = p.requireBytes(KEY_PIN_HASH_ENC)
+        val requested: Long
+        val rpId: String?
+        if (withPermissions) {
+            requested = p.requireLong(KEY_PERMISSIONS)
+            rpId = p.optText(KEY_RP_ID)
+        } else {
+            if (p.has(KEY_PERMISSIONS) || p.has(KEY_RP_ID)) {
+                throw CtapException(CtapStatus.ERR_INVALID_PARAMETER, "getPinToken does not take permissions")
+            }
+            requested = (PERMISSION_MC or PERMISSION_GA).toLong()
+            rpId = null
+        }
+        val protocol = protocol(version)
+        if (withPermissions) checkPermissions(requested)
+        requirePinUsable()
+        val sharedSecret = sharedSecret(protocol, keyAgreement)
+        return withAuthorization(CtapOperation.PIN_UV_AUTH_TOKEN, rpId, authorize) { lease ->
+            checkPin(protocol, sharedSecret, pinHashEnc)
+            resetTokens()
+            beginUsing(lease)
+            permissions = (requested and KNOWN_PERMISSIONS).toInt()
+            permissionsRpId = rpId
+            linkedMapOf(RESP_PIN_UV_AUTH_TOKEN to protocol.encrypt(sharedSecret, tokens.getValue(protocol.version)))
+        }
+    }
+
+    /**
+     * pinHashEnc を復号して PIN を照合する。誤りの場合は鍵交換の鍵を作り直し、
+     * 残り 0 回で `0x32 PIN_BLOCKED`、連続 3 回で `0x34 PIN_AUTH_BLOCKED`、それ以外は `0x31 PIN_INVALID`。
+     */
+    private fun checkPin(protocol: PinUvAuthProtocol, sharedSecret: ByteArray, pinHashEnc: ByteArray) {
+        if (powerCycleRequired()) throw CtapException(CtapStatus.ERR_PIN_AUTH_BLOCKED, "power cycle required")
+        val pinHash = try {
+            protocol.decrypt(sharedSecret, pinHashEnc)
+        } catch (e: PinUvAuthProtocolException) {
+            throw CtapException(CtapStatus.ERR_INVALID_PARAMETER, e.message ?: "pinHashEnc cannot be decrypted")
+        }
+        if (pinHash.size != PIN_HASH_LENGTH) throw CtapException(CtapStatus.ERR_INVALID_PARAMETER, "pinHash must be 16 bytes")
+        when (val result = pinStore.check(pinHash)) {
+            PinCheck.Match -> consecutiveMismatches = 0
+            PinCheck.Blocked -> throw CtapException(CtapStatus.ERR_PIN_BLOCKED)
+            is PinCheck.Mismatch -> {
+                protocol.regenerate()
+                if (mismatchEpoch != sessionEpoch()) consecutiveMismatches = 0
+                consecutiveMismatches++
+                mismatchEpoch = sessionEpoch()
+                when {
+                    result.retries <= 0 -> throw CtapException(CtapStatus.ERR_PIN_BLOCKED)
+                    consecutiveMismatches >= MAX_CONSECUTIVE_MISMATCHES -> throw CtapException(CtapStatus.ERR_PIN_AUTH_BLOCKED)
+                    else -> throw CtapException(CtapStatus.ERR_PIN_INVALID)
+                }
+            }
+        }
+    }
+
+    /**
+     * newPinEnc を復号し、64 バイトのパディング (末尾の 0x00) を除いた PIN の `LEFT(SHA-256(PIN), 16)` を返す。
+     * 復号できない・64 バイトでない場合は `0x02`、4 文字 (コードポイント) 未満・63 バイト超・不正な UTF-8 は `0x37 PIN_POLICY_VIOLATION`。
+     */
+    private fun decryptNewPin(protocol: PinUvAuthProtocol, sharedSecret: ByteArray, newPinEnc: ByteArray): ByteArray {
+        val padded = try {
+            protocol.decrypt(sharedSecret, newPinEnc)
+        } catch (e: PinUvAuthProtocolException) {
+            throw CtapException(CtapStatus.ERR_INVALID_PARAMETER, e.message ?: "newPinEnc cannot be decrypted")
+        }
+        try {
+            if (padded.size != PADDED_PIN_LENGTH) throw CtapException(CtapStatus.ERR_INVALID_PARAMETER, "paddedNewPin must be 64 bytes")
+            val length = padded.indexOfLast { it != 0.toByte() } + 1
+            if (length > MAX_PIN_BYTES) throw CtapException(CtapStatus.ERR_PIN_POLICY_VIOLATION, "PIN is too long")
+            val pin = padded.copyOf(length)
+            try {
+                val codePoints = Charsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(pin)).codePoints().count().toInt()
+                if (codePoints < MIN_PIN_LENGTH) throw CtapException(CtapStatus.ERR_PIN_POLICY_VIOLATION, "PIN is too short")
+                return PinStore.hash(pin)
+            } catch (e: CharacterCodingException) {
+                throw CtapException(CtapStatus.ERR_PIN_POLICY_VIOLATION, "PIN is not valid UTF-8")
+            } finally {
+                pin.fill(0)
+            }
+        } finally {
+            padded.fill(0)
+        }
+    }
+
+    /** PIN の照合を伴う操作の前提: 読み込める、設定済み、ブロックされていない。 */
+    private fun requirePinUsable() {
+        val status = availablePinStatus()
+        if (status.state == PinStatus.State.NOT_SET) throw CtapException(CtapStatus.ERR_PIN_NOT_SET)
+        if (status.retries <= 0) throw CtapException(CtapStatus.ERR_PIN_BLOCKED)
+    }
+
+    private fun availablePinStatus(): PinStatus {
+        val status = pinStore.status()
+        if (status.state == PinStatus.State.UNAVAILABLE) throw CtapException(CtapStatus.ERR_OTHER, "PIN storage unavailable")
+        return status
+    }
+
+    private fun powerCycleRequired(): Boolean =
+        consecutiveMismatches >= MAX_CONSECUTIVE_MISMATCHES && mismatchEpoch == sessionEpoch()
+
+    private fun checkPermissions(requested: Long) {
+        if (requested == 0L) throw CtapException(CtapStatus.ERR_INVALID_PARAMETER, "permissions must not be 0")
+        if (requested and UNSUPPORTED_PERMISSIONS != 0L) {
+            throw CtapException(CtapStatus.ERR_UNAUTHORIZED_PERMISSION, "unsupported permission")
+        }
+    }
+
+    /** 受付ゲートの許可を得て [block] を実行し、ワンタイムを消費せずに完了する。 */
+    private fun <T> withAuthorization(
+        operation: CtapOperation,
+        rpId: String?,
+        authorize: (AuthorizationRequest) -> AuthorizationResult.Granted,
+        block: (AuthorizationLease) -> T
+    ): T {
+        val grant = authorize(AuthorizationRequest(operation, rpId, null, false, false))
+        try {
+            if (!grant.lease.isValid()) throw CtapException(CtapStatus.ERR_OPERATION_DENIED, "authorization revoked")
+            return block(grant.lease)
+        } finally {
+            grant.lease.complete(consumed = false)
         }
     }
 
@@ -93,19 +285,11 @@ class ClientPin(
         version: Long,
         authorize: (AuthorizationRequest) -> AuthorizationResult.Granted
     ): Map<Long, Any> {
-        if (!p.has(KEY_KEY_AGREEMENT)) throw CtapException(CtapStatus.ERR_MISSING_PARAMETER, "keyAgreement is missing")
-        val keyAgreement = p[KEY_KEY_AGREEMENT] as? Map<*, *> ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
+        val keyAgreement = p.requireMap(KEY_KEY_AGREEMENT)
         val requested = p.requireLong(KEY_PERMISSIONS)
-        val rpId = if (p.has(KEY_RP_ID)) {
-            p[KEY_RP_ID] as? String ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-        } else {
-            null
-        }
+        val rpId = p.optText(KEY_RP_ID)
         val protocol = protocol(version)
-        if (requested == 0L) throw CtapException(CtapStatus.ERR_INVALID_PARAMETER, "permissions must not be 0")
-        if (requested and UNSUPPORTED_PERMISSIONS != 0L) {
-            throw CtapException(CtapStatus.ERR_UNAUTHORIZED_PERMISSION, "unsupported permission")
-        }
+        checkPermissions(requested)
         val sharedSecret = sharedSecret(protocol, keyAgreement)
 
         val grant = authorize(AuthorizationRequest(CtapOperation.PIN_UV_AUTH_TOKEN, rpId, null, false, true))
@@ -211,6 +395,19 @@ class ClientPin(
         return this[key] as? Long ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
     }
 
+    private fun Map<*, *>.requireBytes(key: Long): ByteArray {
+        if (!has(key)) throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
+        return this[key] as? ByteArray ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
+    }
+
+    private fun Map<*, *>.requireMap(key: Long): Map<*, *> {
+        if (!has(key)) throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
+        return this[key] as? Map<*, *> ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
+    }
+
+    private fun Map<*, *>.optText(key: Long): String? =
+        if (!has(key)) null else this[key] as? String ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
+
     companion object {
         /** GetInfo の pinUvAuthProtocols (0x06) に広告するプロトコル (優先順)。 */
         val SUPPORTED_PROTOCOLS: List<Int> = listOf(2, 1)
@@ -218,14 +415,33 @@ class ClientPin(
         const val KEY_PIN_UV_AUTH_PROTOCOL: Long = 0x01
         const val KEY_SUB_COMMAND: Long = 0x02
         const val KEY_KEY_AGREEMENT: Long = 0x03
+        const val KEY_PIN_UV_AUTH_PARAM: Long = 0x04
+        const val KEY_NEW_PIN_ENC: Long = 0x05
+        const val KEY_PIN_HASH_ENC: Long = 0x06
         const val KEY_PERMISSIONS: Long = 0x09
         const val KEY_RP_ID: Long = 0x0A
 
+        const val SUB_GET_PIN_RETRIES: Long = 0x01
         const val SUB_GET_KEY_AGREEMENT: Long = 0x02
+        const val SUB_SET_PIN: Long = 0x03
+        const val SUB_CHANGE_PIN: Long = 0x04
+        const val SUB_GET_PIN_TOKEN: Long = 0x05
         const val SUB_GET_PIN_UV_AUTH_TOKEN_USING_UV: Long = 0x06
+        const val SUB_GET_PIN_UV_AUTH_TOKEN_USING_PIN: Long = 0x09
 
         const val RESP_KEY_AGREEMENT: Long = 0x01
         const val RESP_PIN_UV_AUTH_TOKEN: Long = 0x02
+        const val RESP_PIN_RETRIES: Long = 0x03
+        const val RESP_POWER_CYCLE_STATE: Long = 0x04
+
+        /** PIN の最小の長さ (コードポイント数。GetInfo の minPINLength)。 */
+        const val MIN_PIN_LENGTH: Int = 4
+        const val MAX_PIN_BYTES: Int = 63
+        const val PADDED_PIN_LENGTH: Int = 64
+        const val PIN_HASH_LENGTH: Int = 16
+
+        /** PIN の連続の誤りの上限 (これに達するとセッションが変わるまで照合しない)。 */
+        const val MAX_CONSECUTIVE_MISMATCHES: Int = 3
 
         // permissions (CTAP 2.1 §6.5.5.7)
         const val PERMISSION_MC: Int = 0x01

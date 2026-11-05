@@ -3,14 +3,15 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-01 |
-| 版数 | 1.4 |
+| 版数 | 1.5 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.5 (2026-11-05): clientPIN (PIN の設定・変更・照合、PIN によるトークンの発行) を追加 (§2、§3.3、§6、§8、§11.1、§12.5、§13) |
 | 改訂 | 1.4 (2026-11-05): CTAP 2.1 (pinUvAuthToken、credProtect、authenticatorCredentialManagement) を追加 (§1、§2、§3、§4、§6、§8、§11.1、§12) |
 | 改訂 | 1.3 (2026-11-05): hmac-secret 拡張と authenticatorClientPIN の getKeyAgreement を追加 (§2、§3、§4、§7、§8、§11) |
 | 改訂 | 1.2 (2026-11-05): PIN/UV Auth Protocol 1 / 2 の暗号処理 (§10) を追加 (コマンドからはまだ使わない) |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応 (認可の Lease 化、入力検証・処理順序・UP/UV・allowList・GetNextAssertion・上書き登録・CBOR の厳密化)。`review/FIX_PLAN.md` |
-| 実装 | `fido-core/.../ctap2/Ctap2Authenticator.kt`, `CtapConstants.kt`, `cbor/Cbor.kt`, `ctap2/ClientPin.kt`, `ctap2/HmacSecret.kt`, `ctap2/CredProtect.kt`, `ctap2/CredentialManagement.kt`, `pin/PinUvAuthProtocol.kt`, `pin/CoseEcdhKey.kt`, `pin/Hkdf.kt` |
-| 関連要件 | FR-04〜FR-06, FR-10, FR-16, FR-21〜FR-24, SEC-10 |
+| 実装 | `fido-core/.../ctap2/Ctap2Authenticator.kt`, `CtapConstants.kt`, `cbor/Cbor.kt`, `ctap2/ClientPin.kt`, `ctap2/HmacSecret.kt`, `ctap2/CredProtect.kt`, `ctap2/CredentialManagement.kt`, `ctap2/PinStore.kt`, `pin/PinUvAuthProtocol.kt`, `pin/CoseEcdhKey.kt`, `pin/Hkdf.kt` |
+| 関連要件 | FR-04〜FR-06, FR-10, FR-16, FR-21〜FR-25, SEC-10 |
 
 ## 1. 共通仕様
 
@@ -62,10 +63,10 @@ flowchart TD
 
 | 項目 | 内容 |
 |---|---|
-| 要求内容 | 操作種別 (`MAKE_CREDENTIAL` / `GET_ASSERTION` / `RESET` / `SELECTION` / `PIN_UV_AUTH_TOKEN` / `CREDENTIAL_MANAGEMENT`)、RP ID、ユーザー名、UP 要否、UV 要否 |
+| 要求内容 | 操作種別 (`MAKE_CREDENTIAL` / `GET_ASSERTION` / `RESET` / `SELECTION` / `PIN_UV_AUTH_TOKEN` / `CREDENTIAL_MANAGEMENT` / `CLIENT_PIN`)、RP ID、ユーザー名、UP 要否、UV 要否 |
 | 結果 | `Granted(userPresent, userVerified, lease)` または `Denied(status, reason)` |
 | 有効性の確認 | 鍵の生成・署名の直前と応答の直前に `lease.isValid()` と取消トークンを確認 (`ensureActive`)。失効は `0x27`、取消は `0x2D` |
-| 完了 | 許可された操作は、すべての経路で `lease.complete(consumed)` を 1 回呼ぶ。`consumed` = 登録・認証の成功で、UP または `uv` オプションによる UV を伴う (ワンタイム消費)。トークンの発行 (§12.1)・資格情報の管理 (§12.4) は消費しない |
+| 完了 | 許可された操作は、すべての経路で `lease.complete(consumed)` を 1 回呼ぶ。`consumed` = 登録・認証の成功で、UP または `uv` オプションによる UV を伴う (ワンタイム消費)。トークンの発行 (§12.1、§13.2)・資格情報の管理 (§12.4)・PIN の設定と変更 (§13.2) は消費しない |
 
 Android 実装の判定内容と Lease の寿命は DD-05 §2 を参照。
 
@@ -78,13 +79,15 @@ Android 実装の判定内容と Lease の寿命は DD-05 §2 を参照。
 | 0x01 | versions | `["FIDO_2_0", "FIDO_2_1"]` (§12.5) |
 | 0x02 | extensions | `["credProtect", "hmac-secret"]` (§12.3、§11.2) |
 | 0x03 | aaguid | `523283ca3c2c48b58bffa722f900e190` (16 バイト) |
-| 0x04 | options | `{"rk": true, "up": true, "uv": true, "plat": false, "pinUvAuthToken": true, "credMgmt": true, "makeCredUvNotRqd": true}` |
+| 0x04 | options | `{"rk": true, "up": true, "uv": true, "plat": false, "clientPin": <PIN 設定済みか>, "pinUvAuthToken": true, "credMgmt": true, "makeCredUvNotRqd": true}` |
 | 0x05 | maxMsgSize | 2048 |
 | 0x06 | pinUvAuthProtocols | `[2, 1]` (§10) |
 | 0x09 | transports | NFC: `["nfc"]`、Bluetooth HID: `["usb"]` (§2.1) |
 | 0x0A | algorithms | `[{"alg": -7, "type": "public-key"}]` |
+| 0x0D | minPINLength | 4 (§13.4) |
 
-- `clientPin` を含めない = PIN 非対応。ユーザー検証は内蔵 UV (`uv: true`) で、CTAP 2.1 のクライアントは内蔵 UV で pinUvAuthToken を得る (§12.1)。
+- `clientPin`: PIN が未設定なら false、設定済みなら true。PIN の保存データを読み込めない場合も true とする (PIN を使わない経路で迂回させない。§13.1)。
+  ユーザー検証は内蔵 UV (`uv: true`) と PIN の両方を使える。CTAP 2.1 のクライアントは内蔵 UV または PIN で pinUvAuthToken を得る (§12.1、§13.2)。
 - `makeCredUvNotRqd: true`: 本アプリはすべての登録で受付ゲートの本人確認を経るため、UV の指定を必須にしない (§12.5)。
 - 0x07 (maxCredentialCountInList)・0x08 (maxCredentialIdLength) 等の任意項目は含めない (allowList の件数・ID の長さを制限しない)。
   対応しない PIN プロトコルを広告してクライアントの制約を回避することはしない (BD-04 §5 の注記を参照)。
@@ -142,7 +145,7 @@ Android 実装の判定内容と Lease の寿命は DD-05 §2 を参照。
 | 入力 | 処理 |
 |---|---|
 | pinUvAuthParam なし | 通常処理 (内蔵 UV は `uv` オプションと受付ゲートで扱う) |
-| 長さ 0 (プラットフォームのタッチ待ちプローブ) | 認可 (UP) 後に `0x35 PIN_NOT_SET` (PIN 非対応のため。Lease は消費せずに完了する) |
+| 長さ 0 (プラットフォームのタッチ待ちプローブ) | 認可 (UP) 後に、PIN が未設定なら `0x35 PIN_NOT_SET`、設定済み (または読み込めない) なら `0x31 PIN_INVALID` (CTAP 2.1 §6.1.2 手順 1。Lease は消費せずに完了する) |
 | 長さ 1 以上で pinUvAuthProtocol なし | `0x14 MISSING_PARAMETER` |
 | 長さ 1 以上で未対応の pinUvAuthProtocol | `0x02 INVALID_PARAMETER` |
 | 長さ 1 以上 | pinUvAuthToken で検証する (§12.2)。失敗は `0x33 PIN_AUTH_INVALID`。成功しても受付ゲートの認可は行う |
@@ -228,7 +231,7 @@ GetAssertion (キー 0x06) も同様に扱う。
 
 | コマンド | 処理 |
 |---|---|
-| Reset | 設定「PC からのリセットを許可」が OFF なら認可前に `0x27 OPERATION_DENIED`。ON なら認可 (UP・UV) 後に全クレデンシャルを削除し、鍵交換の鍵と pinUvAuthToken を作り直して `0x00` |
+| Reset | 設定「PC からのリセットを許可」が OFF なら認可前に `0x27 OPERATION_DENIED`。ON なら認可 (UP・UV) 後に全クレデンシャルと PIN を削除し、鍵交換の鍵と pinUvAuthToken を作り直して `0x00` |
 | Selection | 認可 (UP) 後に `0x00`。ワンタイムは消費しない (`complete(false)`) |
 
 ## 7. authenticatorData
@@ -265,13 +268,17 @@ GetAssertion (キー 0x06) も同様に扱う。
 | 0x2E | NO_CREDENTIALS | 該当クレデンシャルなし |
 | 0x2F | USER_ACTION_TIMEOUT | 本人確認待ちのタイムアウト (Bluetooth) |
 | 0x30 | NOT_ALLOWED | GetNextAssertion・credentialManagement の列挙の続きの状態なし・期限切れ・失効・チャネル不一致 |
+| 0x31 | PIN_INVALID | PIN の誤り、PIN 設定済みでの長さ 0 の pinUvAuthParam |
+| 0x32 | PIN_BLOCKED | PIN の残りの試行回数が 0 |
 | 0x33 | PIN_AUTH_INVALID | pinUvAuthParam の検証失敗・権限の不足・RP ID の不一致・使用中でないトークン、hmac-secret の saltAuth の不一致 |
-| 0x35 | PIN_NOT_SET | 長さ 0 の pinAuth |
+| 0x34 | PIN_AUTH_BLOCKED | PIN の連続 3 回の誤り (セッションが変わるまで照合しない) |
+| 0x35 | PIN_NOT_SET | PIN 未設定での長さ 0 の pinUvAuthParam、PIN の変更・PIN によるトークンの要求 |
 | 0x36 | PUAT_REQUIRED | credentialManagement で pinUvAuthParam がない |
+| 0x37 | PIN_POLICY_VIOLATION | 新しい PIN が 4 文字未満・63 バイト超・不正な UTF-8 |
 | 0x3E | INVALID_SUBCOMMAND | ClientPIN・credentialManagement の未対応のサブコマンド |
 | 0x3F | UV_INVALID | トークンの発行で、認可が UV を伴わない |
 | 0x40 | UNAUTHORIZED_PERMISSION | 未対応の権限 (be・lbw・acfg) のトークンの要求 |
-| 0x7F | OTHER | 想定外の例外、メタデータの読み込み・保存の失敗 (DD-07) |
+| 0x7F | OTHER | 想定外の例外、メタデータ・PIN の読み込み・保存の失敗 (DD-07) |
 
 ## 9. シーケンス
 
@@ -369,8 +376,9 @@ HKDF は `fido.pin.Hkdf` (RFC 5869) で実装し、RFC 5869 付録 A のテス�
 
 ### 11.1 authenticatorClientPIN (0x06)
 
-対応するサブコマンドは getKeyAgreement (0x02) と getPinUvAuthTokenUsingUvWithPermissions (0x06。§12.1)。
-PIN の設定・PIN によるトークンの発行には対応しない (GetInfo に `clientPin` を含めない)。その他のサブコマンドは `0x3E INVALID_SUBCOMMAND`。
+対応するサブコマンドは getPINRetries (0x01)、getKeyAgreement (0x02)、setPIN (0x03)、changePIN (0x04)、getPinToken (0x05)、
+getPinUvAuthTokenUsingUvWithPermissions (0x06。§12.1)、getPinUvAuthTokenUsingPinWithPermissions (0x09)。PIN に関するものは §13。
+getUVRetries (0x07) など、その他のサブコマンドは `0x3E INVALID_SUBCOMMAND`。
 
 | キー | 名前 | 型 | 必須 | 扱い |
 |---|---|---|---|---|
@@ -529,5 +537,68 @@ GetInfo の項目であり、2.0 のクライアントは知らない項目を�
 | FIDO_2_1 の必須要件 (CTAP 2.1 §9) | hmac-secret、`uv` (rk に対して)、`credMgmt`、credProtect、`pinUvAuthToken`、Protocol 2 を満たす |
 | `makeCredUvNotRqd: true` | すべての登録で受付ゲートの本人確認を経るため、UV の指定を必須にせず `0x36 PUAT_REQUIRED` を返さない |
 | MakeCredential の `up: true` | 2.1 で許容されているため受け付ける (外部レビューの F-07 で不採用とした拒否と整合する) |
-| 対象外 | clientPIN (PIN)、authenticatorConfig、largeBlobs、enterprise attestation、NFC の待機 (AP-C F-04)、試行版 (`FIDO_2_1_PRE`、0x41) |
+| 対象外 | authenticatorConfig (setMinPINLength・alwaysUv 等)、getUVRetries、forcePINChange、largeBlobs、enterprise attestation、NFC の待機 (AP-C F-04)、試行版 (`FIDO_2_1_PRE`、0x41) |
+
+## 13. clientPIN
+
+### 13.1 PIN の保存 (PinStore)
+
+PIN そのものは保存せず、`LEFT(SHA-256(PIN), 16)` と残りの試行回数 (最大 8) を `PinStore` に保存する (Android 実装は DD-07 §7)。
+`PinStore` は全トランスポートで 1 つを共有する。
+
+| 状態 | GetInfo の clientPin | PIN の操作 |
+|---|---|---|
+| NOT_SET | false | setPIN のみ可。changePIN・PIN によるトークンは `0x35 PIN_NOT_SET` |
+| SET | true | setPIN は `0x33`。その他は可 (残り 0 回なら `0x32 PIN_BLOCKED`) |
+| UNAVAILABLE (保存データを読み込めない) | true | すべて `0x7F` (空として扱わず、上書きしない)。アプリの「PIN を消去」で初期化できる |
+
+照合 (`PinStore.check`) は「残りの試行回数を 1 減らして保存 → 比較 → 一致すれば最大に戻す」を 1 つのロックで行う。
+保存できなければ比較しない (回数を減らさずに試行させない)。
+
+### 13.2 サブコマンド
+
+| サブコマンド | パラメータ (キー) | 処理 | 応答 |
+|---|---|---|---|
+| getPINRetries (0x01) | 1 | 残りの試行回数と、連続 3 回の誤りでセッションの変更が必要か | `{3: pinRetries, 4: powerCycleState}` |
+| setPIN (0x03) | 1, 3 keyAgreement, 4 pinUvAuthParam, 5 newPinEnc | 未設定であること → 共有鍵 → `verify(共有鍵, newPinEnc, pinUvAuthParam)` → 新しい PIN の復号と検査 (§13.4) → 認可 (`CLIENT_PIN`) → 保存 | なし |
+| changePIN (0x04) | 1, 3, 4, 5, 6 pinHashEnc | 設定済み・残り 1 回以上 → 共有鍵 → `verify(共有鍵, newPinEnc ‖ pinHashEnc, pinUvAuthParam)` → 認可 (`CLIENT_PIN`) → 照合 (§13.3) → 新しい PIN の復号と検査 → 保存 → トークンをすべて作り直す | なし |
+| getPinToken (0x05。2.0 用) | 1, 3, 6 | permissions・rpId があれば `0x02`。照合の前提は changePIN と同じ → 認可 (`PIN_UV_AUTH_TOKEN`) → 照合 → トークンの発行 (権限 mc・ga) | `{2: encrypt(共有鍵, token)}` |
+| getPinUvAuthTokenUsingPinWithPermissions (0x09) | 1, 3, 6, 9 permissions, 10 rpId | permissions の検査 (§12.1 と同じ) → 照合の前提 → 認可 (`PIN_UV_AUTH_TOKEN`) → 照合 → トークンの発行 (指定の権限・RP ID) | `{2: encrypt(共有鍵, token)}` |
+
+- pinUvAuthParam の不一致は `0x33`、パラメータの欠落は `0x14`、型の不正は `0x11`、未対応のプロトコル・鍵交換の公開鍵の不正・pinHashEnc / newPinEnc の長さの不正は `0x02`。
+- 状態を変える操作 (setPIN・changePIN) と PIN によるトークンの発行は、**受付ゲートの認可を得てから** PIN を照合する。
+  受付外 (前面表示外・本人確認前) では試行回数を減らさずに拒否するため、受付外の総当たりはできない。ワンタイムは消費しない。
+- トークンの扱い (期限・失効・使用後の権限の消去) は §12.1、§12.2 と同じ。PIN によるトークンでも、登録・認証のたびに受付ゲートの認可を得る。
+
+### 13.3 照合と試行回数
+
+| 結果 | 処理 | ステータス |
+|---|---|---|
+| 一致 | 残りの試行回数を 8 に戻し、連続の誤りを 0 にする | — |
+| 不一致 (残り 1 回以上、連続 3 回未満) | 使ったプロトコルの鍵交換の鍵を作り直す | `0x31 PIN_INVALID` |
+| 不一致 (連続 3 回目) | 同上。以後、セッションが変わるまで照合しない (回数も減らさない) | `0x34 PIN_AUTH_BLOCKED` |
+| 不一致 (残り 0 回) | 同上 | `0x32 PIN_BLOCKED` |
+| 残り 0 回の状態での要求 | 照合しない。Reset またはアプリの「PIN を消去」で解除する | `0x32 PIN_BLOCKED` |
+
+連続の誤りの数は認証器のインスタンスごとに持ち、トランスポートのセッションの変化 (`resetSession`。NFC の切断 = 電源の再投入に相当) で 0 に戻す。
+
+### 13.4 新しい PIN の検査
+
+| 項目 | 内容 | エラー |
+|---|---|---|
+| newPinEnc の復号結果 | 64 バイト (PIN を 0x00 でパディング) | `0x02` |
+| PIN | 末尾の 0x00 を除いたもの | — |
+| 長さ | 4 コードポイント以上 (minPINLength)、63 バイト以下 | `0x37 PIN_POLICY_VIOLATION` |
+| 文字コード | UTF-8 として正しいこと | `0x37` |
+
+復号した PIN は検査とハッシュの計算の後に消去する。
+
+### 13.5 設計判断
+
+| 項目 | 内容 |
+|---|---|
+| PIN と内蔵 UV | PIN を設定しても内蔵 UV (受付ゲート) は使える。PIN がブロックされても内蔵 UV は止めない (CTAP 2.1 では両方を止めるが、本アプリの本人確認は端末の生体認証・画面ロックであり、PIN の試行回数で管理しない) |
+| PIN 設定済みでの UV の指定なしの要求 | `makeCredUvNotRqd: true` (§12.5) のとおり、`0x36 PUAT_REQUIRED` を返さない (すべての登録で受付ゲートの本人確認を経るため) |
+| アプリでの PIN の消去 | 試験の利便のため、登録済みのクレデンシャルを残したまま PIN だけを消せる (本人確認が必要。SEC-09)。アプリの全削除・Reset では PIN も消す |
+| 対象外 | forcePINChange、setMinPINLength、noMcGaPermissionsWithClientPin、getUVRetries |
 

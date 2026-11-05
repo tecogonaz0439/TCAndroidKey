@@ -76,6 +76,18 @@
     <string name="credential_discoverable">Passkey (discoverable)</string>
     <string name="credential_non_discoverable">Non-discoverable</string>
     <string name="credential_hmac_secret">hmac-secret (PRF)</string>
+    <string name="settings_category_pin">PIN (clientPIN)</string>
+    <string name="settings_pin_status">PIN</string>
+    <string name="settings_pin_not_set">Not set (set it from the OS or browser)</string>
+    <plurals name="settings_pin_set">
+        <item quantity="one">Set (%1$d attempt left)</item>
+        <item quantity="other">Set (%1$d attempts left)</item>
+    </plurals>
+    <string name="settings_pin_blocked">Blocked (0 attempts left). Clear the PIN or reset the key to unblock it</string>
+    <string name="settings_pin_unavailable">Cannot be read. Clear the PIN to initialize it</string>
+    <string name="settings_pin_clear">Clear PIN</string>
+    <string name="settings_pin_clear_help">Registered credentials are kept</string>
+    <string name="settings_pin_help">The PIN is set and changed from the client (OS or browser). This app only shows its state and can clear it.</string>
     <string name="credential_cred_protect_list">credProtect 2: UV or ID list</string>
     <string name="credential_cred_protect_required">credProtect 3: UV required</string>
     <string name="security_level_strongbox">StrongBox</string>
@@ -103,6 +115,7 @@
     <string name="verify_title_delete">Verify to delete the credential</string>
     <string name="verify_title_delete_all">Verify to delete all credentials</string>
     <string name="verify_title_change_setting">Verify to change this setting</string>
+    <string name="verify_title_clear_pin">Verify to clear the PIN</string>
     <string name="verify_subtitle">Security Key Emulator</string>
     <string name="msg_no_lock_screen">Set up a screen lock first.</string>
     <string name="msg_no_strong_biometric">No strong (Class 3) biometric is enrolled.</string>

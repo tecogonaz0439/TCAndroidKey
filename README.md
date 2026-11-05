@@ -16,7 +16,7 @@
 
 - **FIDO2 security key over NFC** — Host-based card emulation (HCE) of the FIDO applet; CTAP 2.0 / 2.1 commands MakeCredential, GetAssertion, GetNextAssertion, GetInfo, ClientPIN (key agreement and built-in UV tokens), CredentialManagement, Selection, and Reset (optional)
 - **Passkeys and non-discoverable credentials** — ES256 (ECDSA P-256), multiple accounts per site, `none` or packed self attestation
-- **CTAP 2.1 with built-in user verification** — clients get a pinUvAuthToken through on-device verification (no PIN); credProtect levels and credential management (enumerate, rename, delete) are supported
+- **CTAP 2.1 with built-in user verification and clientPIN** — clients get a pinUvAuthToken through on-device verification or a PIN set from the OS or browser; credProtect levels and credential management (enumerate, rename, delete) are supported. The app shows the PIN state and can clear the PIN after verification
 - **hmac-secret extension** — the CTAP extension behind WebAuthn PRF; the per-credential secret is derived from an HMAC key kept in Android Keystore
 - **Keys in the Android Keystore** — A private key is generated for each registration in StrongBox (or the TEE) and never leaves the device; delete keys individually or all at once
 - **Authentication only when you allow it** — Only while the app is on screen, only within a short window after fingerprint (or screen lock) verification, and by default only once per verification
@@ -63,7 +63,7 @@ See [Testing](docs/TESTING.md) for step-by-step checks on Windows, macOS, and An
 | macOS (Chrome) | NFC | Not supported by the browser |
 | Windows / macOS browsers | Bluetooth HID | Experimental |
 
-Known limitations (no clientPIN, part of CTAP 2.1 only, no U2F, no largeBlob, and so on) are listed in the [design documents](docs/design/appendix/C_roadmap.md).
+Known limitations (part of CTAP 2.1 only, no forcePINChange / setMinPINLength, no U2F, no largeBlob, and so on) are listed in the [design documents](docs/design/appendix/C_roadmap.md).
 
 ## Documentation
 

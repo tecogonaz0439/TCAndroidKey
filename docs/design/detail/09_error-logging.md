@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-09 |
-| 版数 | 1.1 |
+| 版数 | 1.2 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.2 (2026-11-05): PIN の消去のイベントを追加 |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応 (例外の扱い、取消・失効・予約中のエラー、メタデータを読めない場合、logcat の出力内容)。`review/FIX_PLAN.md` |
 | 関連要件 | FR-17, SEC-08, SEC-10 |
 
@@ -74,6 +75,7 @@
 | Bluetooth | ERROR | `failed to register HID device` / `sendReport denied: …` |
 | Keystore | INFO | `deleted credential for <RP>` / `deleted all credentials` |
 | Keystore | ERROR | `failed to load credentials: …` / `failed to delete credential(s): …` |
+| PIN | INFO / ERROR | `cleared the PIN` / `failed to clear the PIN: …` (PIN・ハッシュは出力しない) |
 
 ### 3.3 取り扱い
 

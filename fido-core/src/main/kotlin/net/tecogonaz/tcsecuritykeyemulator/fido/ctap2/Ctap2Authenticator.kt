@@ -17,9 +17,10 @@ import java.security.MessageDigest
  * CTAP 2.0 / 2.1 認証器 (FIDO2 セキュリティキー) のコマンド処理本体。トランスポート (NFC / HID) には依存しない。
  *
  * 対応コマンド: GetInfo / MakeCredential / GetAssertion / GetNextAssertion / ClientPIN (getKeyAgreement、
- * getPinUvAuthTokenUsingUvWithPermissions) / Reset / Selection / CredentialManagement。拡張は credProtect・hmac-secret。
- * 署名アルゴリズムは ES256 (P-256) のみ。PIN は未対応で、ユーザー検証は端末内蔵 UV
- * (生体認証・画面ロック資格情報) として [AuthorizationPolicy] に委譲する。pinUvAuthToken を使った要求でも、
+ * getPinUvAuthTokenUsingUvWithPermissions、PIN の設定・変更・PIN によるトークンの発行) / Reset / Selection /
+ * CredentialManagement。拡張は credProtect・hmac-secret。
+ * 署名アルゴリズムは ES256 (P-256) のみ。ユーザー検証は端末内蔵 UV (生体認証・画面ロック資格情報) として
+ * [AuthorizationPolicy] に委譲し、clientPIN (PIN) も使える。pinUvAuthToken を使った要求でも、
  * 登録・認証・資格情報の管理のたびに [AuthorizationPolicy] の許可を得る。
  *
  * 1 つのトランスポートにつき 1 インスタンスを使う (GetNextAssertion の状態を保持するため)。
@@ -36,7 +37,9 @@ class Ctap2Authenticator(
     /** イベントの時刻 (wall clock)。 */
     private val clock: () -> Long = System::currentTimeMillis,
     /** GetNextAssertion のタイマー用の単調時計 (ms)。時計の変更の影響を受けない。 */
-    private val monotonicClock: () -> Long = { System.nanoTime() / 1_000_000 }
+    private val monotonicClock: () -> Long = { System.nanoTime() / 1_000_000 },
+    /** clientPIN の保存先。全トランスポートで共有する。 */
+    private val pinStore: PinStore = InMemoryPinStore()
 ) {
     private class PendingAssertions(
         val credentials: List<StoredCredential>,
@@ -66,7 +69,7 @@ class Ctap2Authenticator(
     private var sessionEpoch = 0L
 
     /** PIN/UV Auth Protocol の状態 (鍵交換の鍵・pinUvAuthToken)。`process` の直列化の内側でのみ使う。 */
-    private val clientPin = ClientPin(monotonicClock, { sessionEpoch })
+    private val clientPin = ClientPin(monotonicClock, { sessionEpoch }, pinStore = pinStore)
 
     /** credentialManagement の列挙の途中状態。`process` の直列化の内側でのみ使う。 */
     private val credentialManagement = CredentialManagement(store, clientPin, monotonicClock) { sessionEpoch }
@@ -161,6 +164,8 @@ class Ctap2Authenticator(
                 "up" to true,
                 "uv" to true,
                 "plat" to false,
+                // 読み込めない場合も設定済みとして扱う (PIN を使わない経路で迂回させない)
+                "clientPin" to clientPin.pinStatus().isSet,
                 "pinUvAuthToken" to true,
                 "credMgmt" to true,
                 // 本アプリはすべての登録で内蔵 UV (受付ゲート) を経るため、UV の指定を必須にしない
@@ -169,7 +174,8 @@ class Ctap2Authenticator(
             0x05L to config.maxMessageSize.toLong(),
             0x06L to clientPin.supportedProtocols.map { it.toLong() },
             0x09L to config.transports,
-            0x0AL to listOf(linkedMapOf("alg" to CoseAlgorithm.ES256, "type" to "public-key"))
+            0x0AL to listOf(linkedMapOf("alg" to CoseAlgorithm.ES256, "type" to "public-key")),
+            0x0DL to ClientPin.MIN_PIN_LENGTH.toLong()
         )
     }
 
@@ -428,6 +434,7 @@ class Ctap2Authenticator(
         try {
             ensureActive(grant.lease, keepAlive)
             store.deleteAll()
+            pinStore.clear()
             clientPin.reset()
             success = true
         } finally {
@@ -473,7 +480,8 @@ class Ctap2Authenticator(
      * pinUvAuthParam (CTAP 2.0 の pinAuth) を確認し、pinUvAuthToken で検証できた場合は true を返す。
      *
      * - なし: false (pinUvAuthToken を使わない要求)
-     * - 長さ 0: プラットフォームによる「タッチ待ち」プローブ。存在確認後に `0x35 PIN_NOT_SET` (PIN 非対応のため)
+     * - 長さ 0: プラットフォームによる「タッチ待ち」プローブ。存在確認後に、PIN が未設定なら `0x35 PIN_NOT_SET`、
+     *   設定済み (または読み込めない) なら `0x31 PIN_INVALID` (CTAP 2.1 §6.1.2 手順 1)
      * - それ以外: [ClientPin.verifyForOperation] で検証する (失敗は `0x33`、プロトコルの省略は `0x14`、未対応は `0x02`)
      */
     private fun verifyPinUvAuthParam(
@@ -488,7 +496,7 @@ class Ctap2Authenticator(
         if (param == null) return false
         if (param.isEmpty()) {
             authorizeOrThrow(request.copy(requireUserVerification = false), keepAlive).lease.complete(consumed = false)
-            throw CtapException(CtapStatus.ERR_PIN_NOT_SET)
+            throw CtapException(if (clientPin.pinStatus().isSet) CtapStatus.ERR_PIN_INVALID else CtapStatus.ERR_PIN_NOT_SET)
         }
         clientPin.verifyForOperation(version, clientDataHash, param, permission, rpId)
         return true

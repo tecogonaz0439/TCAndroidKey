@@ -1,6 +1,6 @@
 # Security Policy
 
-**Last updated: 2026-11-03**
+**Last updated: 2026-11-05**
 
 ## 1. Purpose and Scope
 
@@ -33,11 +33,12 @@ For these reasons, **do not use the App as a replacement for a physical security
 | Device lock | While the device is locked, the operating system prevents both NFC responses and key use |
 | Key usage period | Keys can sign only within 300 seconds after user authentication and only while the device is unlocked (defense in depth by the Android Keystore) |
 | Metadata | Metadata such as RP IDs and user names is stored encrypted with an AES-256-GCM key in the Android Keystore |
+| PIN | A PIN set from a client is stored only as a truncated SHA-256 hash with its retry counter, encrypted with an AES-256-GCM key in the Android Keystore. PIN checks are accepted only within the acceptance window, at most 8 attempts are allowed, and 3 consecutive mismatches require reconnecting |
 | Backup | All data is excluded from Android backup and device transfer |
 | Screen | Screenshots and screen sharing are blocked |
 | Logs | The event log is kept in memory only. RP IDs, user names, and connected host names are not written to the system log (logcat) |
 | Network | The App does not communicate over the internet |
-| Deletion / protection settings | Deleting keys and weakening protection settings (such as turning off one-time authorization) require user verification |
+| Deletion / protection settings | Deleting keys, clearing the PIN, and weakening protection settings (such as turning off one-time authorization) require user verification |
 
 ## 4. Known Limitations and Residual Risks
 
@@ -49,7 +50,7 @@ As a testing tool, the App accepts the following limitations and risks. They are
 | Running as an app | Authentication runs in the App's process, so it is affected by vulnerabilities in the operating system or the App, and by devices modified by rooting or similar means |
 | Shared debug signing key | Development builds are signed with a shared signing key published in the repository. If a malicious APK signed with the same key is installed as an update, it may take over the App's data and keys and use them |
 | Metadata rollback | Tampering with or corruption of the encrypted metadata is detected, but replacing it with an earlier legitimate file (rolling back the signature counter) is not |
-| PIN | clientPIN (verification by PIN) is not supported. User verification uses the device's biometrics or screen lock |
+| PIN | The PIN hash is a truncated SHA-256, so an attacker who could extract both the PIN file and its Keystore key could brute-force a short PIN offline. Built-in verification (biometrics or screen lock) keeps working even if the PIN is blocked. Use a test PIN |
 | Attestation | The App has no vendor attestation and supports only `none` or self attestation |
 | Bluetooth HID | Experimental. It may not work depending on the host environment |
 | Key operations already started | A Keystore operation that started before acceptance was stopped cannot itself be cancelled (after stopping, no new key operation is started and results are not sent) |

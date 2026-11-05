@@ -7,7 +7,7 @@
 
 | ID | 制約 | 影響 | 回避策 |
 |---|---|---|---|
-| L-01 | clientPIN 非対応 | RP / クライアントが PIN 設定済みの認証器を要求する場合に登録できない。内蔵 UV による pinUvAuthToken (CTAP 2.1) に対応したクライアントは UV 必須でも使える (python-fido2 2.0.0 の `Fido2Client` で確認。DD-10 CT-07) | RP の userVerification を `preferred` 等にする |
+| L-01 | clientPIN の一部の機能に非対応 (forcePINChange、setMinPINLength、getUVRetries。DD-01 §13.5) | PIN の最小の長さの変更・PIN の変更の強制を試験できない。PIN がブロックされても内蔵 UV は止まらない (CTAP 2.1 と異なる) | — |
 | L-02 | CTAP 2.1 の一部のみ対応 (pinUvAuthToken、credProtect、credentialManagement。DD-01 §12) | authenticatorConfig、largeBlobs、enterprise attestation 等が使えない | — |
 | L-03 | U2F (CTAP1) 非対応 | U2F 専用の古い RP で使えない | — |
 | L-04 | 拡張 (largeBlob, minPinLength, credBlob 等) 非対応 (hmac-secret・credProtect は対応。DD-01 §11.2、§12.3) | 拡張を必須とする RP で使えない | — |
@@ -26,7 +26,7 @@
 | ID | 課題 | 概要 | 優先度 |
 |---|---|---|---|
 | F-01 | 互換性試験の実施と記録 | DD-10 §4 のマトリクスを埋め、BD-04 §5 を更新する | 高 |
-| F-02 | clientPIN (PIN/UV Auth Protocol 2) | PIN 必須の RP・クライアントでの試験に対応する | 中 |
+| F-02 | clientPIN (PIN/UV Auth Protocol 2) | PIN 必須の RP・クライアントでの試験に対応する | 済 (2026-11-05。DD-01 §13) |
 | F-03 | CTAP 2.1 (`FIDO_2_1`) | credProtect、credentialManagement、getPinUvAuthTokenUsingUvWithPermissions | 済 (2026-11-05。DD-01 §12) |
 | F-04 | NFC での待機 (CTAP 2.1 の 0x9100 / NFCCTAP_GETRESPONSE) | 本人確認前にかざしても 1 回で完了できるようにする (クライアント対応の調査が必要) | 低 |
 | F-05 | hmac-secret 拡張 | PRF 拡張を使う RP の試験に対応する | 済 (2026-11-05。DD-01 §11.2) |

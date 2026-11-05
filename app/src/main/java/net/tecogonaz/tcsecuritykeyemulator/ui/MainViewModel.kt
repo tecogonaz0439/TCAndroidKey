@@ -24,6 +24,7 @@ import net.tecogonaz.tcsecuritykeyemulator.data.LogEntry
 import net.tecogonaz.tcsecuritykeyemulator.data.LogLevel
 import net.tecogonaz.tcsecuritykeyemulator.domain.AppSettings
 import net.tecogonaz.tcsecuritykeyemulator.domain.DeviceCapabilities
+import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.PinStatus
 import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.StoredCredential
 import net.tecogonaz.tcsecuritykeyemulator.keystore.KeystoreCredentialStore
 
@@ -34,6 +35,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     val storageStatus: StateFlow<KeystoreCredentialStore.StorageStatus> = container.credentialStore.status
     val events: StateFlow<List<LogEntry>> = container.eventLog.entries
     val bluetooth: StateFlow<BluetoothHidAuthenticator.State> = container.bluetooth.state
+    val pinStatus: StateFlow<PinStatus> = container.pinStore.state
 
     private val _capabilities = MutableStateFlow(DeviceCapabilities())
     val capabilities: StateFlow<DeviceCapabilities> = _capabilities.asStateFlow()
@@ -52,6 +54,8 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
             runCatching { container.credentialStore.load() }.onFailure {
                 container.eventLog.log(LogLevel.ERROR, "Keystore", "failed to load credentials: $it")
             }
+            // PIN の状態を読み込む (読み込めない場合は UNAVAILABLE として表示する)
+            container.pinStore.status()
         }
     }
 
@@ -78,12 +82,24 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    /** 全削除。メタデータを読み込めない状態からの初期化にも使う。 */
+    /** 全削除 (PIN も消す。OS からのリセットと同じ扱い)。メタデータを読み込めない状態からの初期化にも使う。 */
     fun deleteAllCredentials() {
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching { container.credentialStore.deleteAll() }
+            runCatching {
+                container.credentialStore.deleteAll()
+                container.pinStore.clear()
+            }
                 .onSuccess { container.eventLog.log(LogLevel.INFO, "Keystore", "deleted all credentials") }
                 .onFailure { container.eventLog.log(LogLevel.ERROR, "Keystore", "failed to delete credentials: ${it.message}") }
+        }
+    }
+
+    /** PIN を消す (登録済みのクレデンシャルは残す)。読み込めない状態からの初期化にも使う。 */
+    fun clearPin() {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { container.pinStore.clear() }
+                .onSuccess { container.eventLog.log(LogLevel.INFO, "PIN", "cleared the PIN") }
+                .onFailure { container.eventLog.log(LogLevel.ERROR, "PIN", "failed to clear the PIN: ${it.message}") }
         }
     }
 
