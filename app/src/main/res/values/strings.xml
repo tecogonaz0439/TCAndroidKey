@@ -105,7 +105,7 @@
     <string name="action_clear_text">Clear</string>
     <string name="dialog_edit_title_title">Edit title</string>
     <string name="dialog_edit_title_label">Title</string>
-    <string name="dialog_edit_title_help">Shown only in this app (for example, a site name or an account name). Leave it empty to show "%1$s".</string>
+    <string name="dialog_edit_title_help">Shown only in this app (for example, a site name or an account name). Leave it empty to show the default, "%1$s" (the site name, or the RP ID if the site sent no name).</string>
     <string name="dialog_delete_all_title">Delete all credentials?</string>
     <plurals name="dialog_delete_all_message">
         <item quantity="one">The %1$d key stored by this app will be permanently deleted.</item>

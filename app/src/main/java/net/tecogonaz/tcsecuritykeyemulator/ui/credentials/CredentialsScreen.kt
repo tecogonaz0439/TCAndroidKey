@@ -192,6 +192,7 @@ fun CredentialsScreen(viewModel: MainViewModel, actions: UiActions) {
 /**
  * タイトルの編集 (FR-27)。空欄で保存すると既定のタイトル (rp.name、なければ RP ID) に戻る。
  * 入力は [StoredCredential.MAX_LABEL_LENGTH] コードポイントまで。保存時の正規化はストアが行う。
+ * 既定のタイトルは入力欄に薄く表示しない (入力済みの値と見分けにくいため)。説明文で示す。
  */
 @Composable
 private fun EditTitleDialog(credential: StoredCredential, onDismiss: () -> Unit, onSave: (String?) -> Unit) {
@@ -211,7 +212,6 @@ private fun EditTitleDialog(credential: StoredCredential, onDismiss: () -> Unit,
                         if (value.text.codePointCount(0, value.text.length) <= StoredCredential.MAX_LABEL_LENGTH) text = value
                     },
                     label = { Text(stringResource(R.string.dialog_edit_title_label)) },
-                    placeholder = { Text(credential.defaultTitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     singleLine = true,
                     trailingIcon = if (text.text.isNotEmpty()) {
                         {

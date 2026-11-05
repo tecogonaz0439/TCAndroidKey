@@ -102,7 +102,7 @@
     <string name="action_clear_text">消去</string>
     <string name="dialog_edit_title_title">タイトルの編集</string>
     <string name="dialog_edit_title_label">タイトル</string>
-    <string name="dialog_edit_title_help">このアプリ内の表示にのみ使います (サイト名やアカウント名など)。空欄にすると「%1$s」を表示します。</string>
+    <string name="dialog_edit_title_help">このアプリ内の表示にのみ使います (サイト名やアカウント名など)。空欄にすると既定の「%1$s」(サイト名。サイトが名前を送らない場合は RP ID) を表示します。</string>
     <string name="dialog_delete_all_title">すべてのクレデンシャルを削除しますか?</string>
     <plurals name="dialog_delete_all_message">
         <item quantity="other">このアプリが保管している %1$d 件の鍵をすべて完全に削除します。</item>
