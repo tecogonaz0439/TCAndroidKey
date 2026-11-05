@@ -15,7 +15,7 @@ AI コーディングエージェント (Claude Code、Codex など) と開発�
 - **UI の流用元**: [TCSameuraDamMonitor-android](https://github.com/tecogonaz0439/TCSameuraDamMonitor-android)。UI 部品・ビルド構成・バージョンを可能な限り合わせる
 - **言語**: 利用者・設計書・コードコメントは日本語。README・利用規約・セキュリティポリシーは英語版と日本語版の両方を持つ
 
-## 2. 現在の状態 (2026-11-05 時点)
+## 2. 現在の状態 (2026-11-06 時点)
 
 - 作業ブランチ: `main` (リポジトリの既定ブランチ。旧名 `claude/friendly-sagan-ipwxxv`)
 - 実装済み: CTAP 2.0 / 2.1 認証器、NFC / Bluetooth HID、Keystore 保管、認可ゲート、UI 一式、言語設定、利用規約・セキュリティポリシー表示、アイコン、
