@@ -42,6 +42,12 @@ sealed interface PinCheck {
 interface PinStore {
     fun status(): PinStatus
 
+    /**
+     * PIN の状態の版。[setPin]・[changePin]・[clear] (Reset・アプリでの全削除・PIN の消去) のたびに増える ([check] では増えない)。
+     * 各トランスポートの認証器は pinUvAuthToken の発行時の版を記録し、版が変わったらトークンを使えなくする (DD-01 §12.1)。
+     */
+    val revision: Long
+
     /** 未設定の場合のみ PIN を設定し、試行回数を最大にする。設定済みなら false。 */
     fun setPin(pinHash: ByteArray): Boolean
 
@@ -71,6 +77,10 @@ class InMemoryPinStore : PinStore {
     private var pinHash: ByteArray? = null
     private var retries = PinStore.MAX_RETRIES
 
+    @Volatile
+    override var revision: Long = 0
+        private set
+
     @Synchronized
     override fun status(): PinStatus =
         PinStatus(if (pinHash == null) PinStatus.State.NOT_SET else PinStatus.State.SET, retries)
@@ -80,6 +90,7 @@ class InMemoryPinStore : PinStore {
         if (this.pinHash != null) return false
         this.pinHash = pinHash.copyOf()
         retries = PinStore.MAX_RETRIES
+        revision++
         return true
     }
 
@@ -97,11 +108,13 @@ class InMemoryPinStore : PinStore {
     override fun changePin(pinHash: ByteArray) {
         this.pinHash = pinHash.copyOf()
         retries = PinStore.MAX_RETRIES
+        revision++
     }
 
     @Synchronized
     override fun clear() {
         pinHash = null
         retries = PinStore.MAX_RETRIES
+        revision++
     }
 }

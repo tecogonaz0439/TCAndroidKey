@@ -39,10 +39,15 @@ class CredentialManagement(
     }
 
     /**
+     * @param raw 要求のマップの各値の受信したままのバイト列 ([Cbor.rawMapValues])。pinUvAuthParam の認証対象に使う
      * @param authorize 受付ゲートの認可。拒否時は例外を投げる。
      * @return 応答の CBOR マップ (空の応答は null)
      */
-    fun process(p: Map<*, *>, authorize: (AuthorizationRequest) -> AuthorizationResult.Granted): Map<Long, Any>? {
+    fun process(
+        p: Map<*, *>,
+        raw: Map<Any?, ByteArray>,
+        authorize: (AuthorizationRequest) -> AuthorizationResult.Granted
+    ): Map<Long, Any>? {
         if (!p.has(KEY_SUB_COMMAND)) throw CtapException(CtapStatus.ERR_MISSING_PARAMETER, "subCommand is missing")
         val subCommand = p[KEY_SUB_COMMAND] as? Long ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
         val previous = state
@@ -51,13 +56,14 @@ class CredentialManagement(
             SUB_GET_NEXT_RP -> next(previous, SUB_ENUMERATE_RPS_BEGIN)
             SUB_GET_NEXT_CREDENTIAL -> next(previous, SUB_ENUMERATE_CREDENTIALS_BEGIN)
             SUB_GET_CREDS_METADATA, SUB_ENUMERATE_RPS_BEGIN, SUB_ENUMERATE_CREDENTIALS_BEGIN,
-            SUB_DELETE_CREDENTIAL, SUB_UPDATE_USER_INFORMATION -> authenticated(p, subCommand, authorize)
+            SUB_DELETE_CREDENTIAL, SUB_UPDATE_USER_INFORMATION -> authenticated(p, raw, subCommand, authorize)
             else -> throw CtapException(CtapStatus.ERR_INVALID_SUBCOMMAND, "unsupported credentialManagement subcommand $subCommand")
         }
     }
 
     private fun authenticated(
         p: Map<*, *>,
+        raw: Map<Any?, ByteArray>,
         subCommand: Long,
         authorize: (AuthorizationRequest) -> AuthorizationResult.Granted
     ): Map<Long, Any>? {
@@ -76,11 +82,12 @@ class CredentialManagement(
         } else {
             null
         }
-        // 認証対象: サブコマンド (1 バイト) ‖ subCommandParams の CBOR (パラメータを持つサブコマンドのみ)
+        // 認証対象: サブコマンド (1 バイト) ‖ subCommandParams の受信したバイト列 (パラメータを持つサブコマンドのみ)。
+        // 再エンコードすると、canonical でない CBOR を送るクライアントの署名と一致しないため、受信したバイト列を使う。
         val takesParams = subCommand == SUB_ENUMERATE_CREDENTIALS_BEGIN || subCommand == SUB_DELETE_CREDENTIAL ||
             subCommand == SUB_UPDATE_USER_INFORMATION
         if (takesParams && params == null) throw CtapException(CtapStatus.ERR_MISSING_PARAMETER, "subCommandParams is missing")
-        val message = byteArrayOf(subCommand.toByte()) + (if (takesParams) Cbor.encode(params) else ByteArray(0))
+        val message = byteArrayOf(subCommand.toByte()) + (if (takesParams) raw.getValue(KEY_SUB_COMMAND_PARAMS) else ByteArray(0))
         val boundRpId = clientPin.verifyForCredentialManagement(version, message, param)
 
         val grant = authorize(AuthorizationRequest(CtapOperation.CREDENTIAL_MANAGEMENT, boundRpId, null, false, true))

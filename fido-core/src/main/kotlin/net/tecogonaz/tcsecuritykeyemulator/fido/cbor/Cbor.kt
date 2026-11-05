@@ -136,6 +136,30 @@ object Cbor {
         return value
     }
 
+    /**
+     * データ全体が 1 つのマップであるとして、各値の受信したままのバイト列を返す (キーは [decode] と同じ型。整数は Long)。
+     * 署名・HMAC の対象を、再エンコードではなく受信したバイト列で作るために使う (DD-01 §12.4)。
+     * 内容の検証は [decode] と同じ (不正な入力は [CborException])。
+     */
+    fun rawMapValues(data: ByteArray, offset: Int = 0, length: Int = data.size - offset): Map<Any?, ByteArray> {
+        val reader = Reader(data, offset, offset + length)
+        val ib = reader.readByte()
+        if (ib ushr 5 != 5) throw CborException("not a map")
+        val n = reader.readArg(ib and 0x1F)
+        if (n > reader.end - reader.pos) throw CborException("map length exceeds data")
+        val out = LinkedHashMap<Any?, ByteArray>()
+        repeat(n.toInt()) {
+            val key = reader.readItem(1)
+            if (key is ByteArray || key is List<*> || key is Map<*, *>) throw CborException("unsupported map key type")
+            if (out.containsKey(key)) throw CborException("duplicate map key")
+            val start = reader.pos
+            reader.readItem(1)
+            out[key] = data.copyOfRange(start, reader.pos)
+        }
+        if (reader.pos != offset + length) throw CborException("trailing bytes")
+        return out
+    }
+
     /** 先頭の 1 データ項目をデコードし、値と消費バイト数を返す。 */
     fun decodeFirst(data: ByteArray, offset: Int = 0): Pair<Any?, Int> {
         val reader = Reader(data, offset, data.size)

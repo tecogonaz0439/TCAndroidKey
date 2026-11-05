@@ -25,6 +25,7 @@ import java.security.SecureRandom
  * - 発行時の認可 (Lease) が失効した (受付の停止・前面離脱)
  * - トランスポートのセッションが変わった ([sessionEpoch] の変化。NFC の切断など)
  * - 新しいトークンの発行・Reset
+ * - 共有の [PinStore] の版が変わった (いずれかのトランスポートでの Reset・PIN の設定と変更、アプリでの全削除・PIN の消去)
  *
  * [Ctap2Authenticator] のインスタンスごとに 1 つ持ち、`process` の直列化の内側で使う (スレッドセーフではない)。
  */
@@ -50,6 +51,7 @@ class ClientPin(
     private var beganAt = 0L
     private var tokenLease: AuthorizationLease = AuthorizationLease.UNBOUND
     private var tokenEpoch = 0L
+    private var tokenPinRevision = 0L
 
     // ---------------------------------------------------------------- PIN の連続の誤り (電源の再投入 = セッションの変化で戻す)
     private var consecutiveMismatches = 0
@@ -93,14 +95,15 @@ class ClientPin(
      * @param authorize 内蔵 UV (受付ゲート) の認可。拒否時は例外を投げる。
      */
     fun process(p: Map<*, *>, authorize: (AuthorizationRequest) -> AuthorizationResult.Granted): Map<Long, Any>? {
-        val version = p.requireLong(KEY_PIN_UV_AUTH_PROTOCOL)
         val subCommand = p.requireLong(KEY_SUB_COMMAND)
+        if (subCommand == SUB_GET_PIN_RETRIES) {
+            // getPINRetries の pinUvAuthProtocol は省略できる (CTAP 2.1 §6.5.5、§6.5.5.2)。指定された場合は対応を確認する
+            if (p.has(KEY_PIN_UV_AUTH_PROTOCOL)) protocol(p.requireLong(KEY_PIN_UV_AUTH_PROTOCOL))
+            val status = availablePinStatus()
+            return linkedMapOf(RESP_PIN_RETRIES to status.retries.toLong(), RESP_POWER_CYCLE_STATE to powerCycleRequired())
+        }
+        val version = p.requireLong(KEY_PIN_UV_AUTH_PROTOCOL)
         return when (subCommand) {
-            SUB_GET_PIN_RETRIES -> {
-                protocol(version)
-                val status = availablePinStatus()
-                linkedMapOf(RESP_PIN_RETRIES to status.retries.toLong(), RESP_POWER_CYCLE_STATE to powerCycleRequired())
-            }
             SUB_GET_KEY_AGREEMENT -> linkedMapOf(RESP_KEY_AGREEMENT to protocol(version).getPublicKey())
             SUB_SET_PIN -> setPin(p, version, authorize)
             SUB_CHANGE_PIN -> changePin(p, version, authorize)
@@ -213,7 +216,7 @@ class ClientPin(
 
     /**
      * newPinEnc を復号し、64 バイトのパディング (末尾の 0x00) を除いた PIN の `LEFT(SHA-256(PIN), 16)` を返す。
-     * 復号できない・64 バイトでない場合は `0x02`、4 文字 (コードポイント) 未満・63 バイト超・不正な UTF-8 は `0x37 PIN_POLICY_VIOLATION`。
+     * 復号できない・長さが不正 (Protocol 2 は 64 バイト以外、Protocol 1 は 64 バイト未満) の場合は `0x02`、4 文字 (コードポイント) 未満・63 バイト超・不正な UTF-8 は `0x37 PIN_POLICY_VIOLATION`。
      */
     private fun decryptNewPin(protocol: PinUvAuthProtocol, sharedSecret: ByteArray, newPinEnc: ByteArray): ByteArray {
         val padded = try {
@@ -222,7 +225,9 @@ class ClientPin(
             throw CtapException(CtapStatus.ERR_INVALID_PARAMETER, e.message ?: "newPinEnc cannot be decrypted")
         }
         try {
-            if (padded.size != PADDED_PIN_LENGTH) throw CtapException(CtapStatus.ERR_INVALID_PARAMETER, "paddedNewPin must be 64 bytes")
+            // CTAP 2.1 は 64 バイトちょうど。CTAP 2.0 (Protocol 1) は「64 バイト以上」のため、Protocol 1 は長いパディングも受け付ける
+            val validLength = if (protocol.version == 1) padded.size >= PADDED_PIN_LENGTH else padded.size == PADDED_PIN_LENGTH
+            if (!validLength) throw CtapException(CtapStatus.ERR_INVALID_PARAMETER, "invalid paddedNewPin length ${padded.size}")
             val length = padded.indexOfLast { it != 0.toByte() } + 1
             if (length > MAX_PIN_BYTES) throw CtapException(CtapStatus.ERR_PIN_POLICY_VIOLATION, "PIN is too long")
             val pin = padded.copyOf(length)
@@ -343,7 +348,7 @@ class ClientPin(
         if (!inUse) return false
         val elapsed = monotonicClock() - beganAt
         val expired = elapsed > MAX_USAGE_PERIOD_MS || (!used && elapsed > INITIAL_USAGE_LIMIT_MS) ||
-            tokenEpoch != sessionEpoch() || !tokenLease.isValid()
+            tokenEpoch != sessionEpoch() || tokenPinRevision != pinStore.revision || !tokenLease.isValid()
         if (expired) stopUsing()
         return inUse
     }
@@ -371,6 +376,7 @@ class ClientPin(
         beganAt = monotonicClock()
         tokenLease = lease
         tokenEpoch = sessionEpoch()
+        tokenPinRevision = pinStore.revision
     }
 
     private fun stopUsing() {

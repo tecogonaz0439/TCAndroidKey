@@ -167,7 +167,8 @@ class KeystoreCredentialStore(
             rpName = rpName,
             user = user,
             discoverable = discoverable,
-            createdAtMillis = System.currentTimeMillis(),
+            // 時計が巻き戻っても既存のどの credential より新しくする (上書き登録と discoverable の順序のため)
+            createdAtMillis = StoredCredential.nextCreatedAt(System.currentTimeMillis(), cache.values),
             lastUsedAtMillis = null,
             signCount = 0,
             publicKeyX = x,

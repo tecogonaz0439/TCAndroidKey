@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-10 |
-| 版数 | 1.7 |
+| 版数 | 1.8 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.8 (2026-11-05): コードレビュー (2026-11-05) の指摘への対応の単体テスト (UT-168〜173) を追加 |
 | 改訂 | 1.7 (2026-11-05): clientPIN の単体テスト (UT-157〜167)、CT-09、IT-36・IT-37 を追加。UT-10・UT-123・CT-07 を更新 |
 | 改訂 | 1.6 (2026-11-05): CTAP 2.1 の単体テスト (UT-132〜156)、CT-07・CT-08 を追加。UT-10・UT-123・UT-128・CT-01・§4 を更新 |
 | 改訂 | 1.5 (2026-11-05): hmac-secret の単体テスト (UT-123〜131)、CT-06 を追加。UT-10・UT-107・CT-05 を更新 |
@@ -16,7 +17,7 @@
 
 ## 1. 単体テスト (UT)
 
-実行: `./gradlew :fido-core:test testDebugUnitTest` (計 167 件: fido-core 163 件、app 4 件。うち UT-107・UT-156 は環境変数指定時のみ実行。2026-11-05 時点で全件成功)
+実行: `./gradlew :fido-core:test testDebugUnitTest` (計 173 件: fido-core 169 件、app 4 件。うち UT-107・UT-156 は環境変数指定時のみ実行。2026-11-05 時点で全件成功)
 
 ### 1.1 CBOR (`CborTest`)
 
@@ -34,6 +35,7 @@
 | UT-40 | rejectsNonCanonicalIntegerAndLengthEncodings | 最短でない整数・長さ (`18 01`、`19 00 17`、`58 01 …` 等) を拒否 | SEC-10 |
 | UT-41 | rejectsTags | タグ (`C0 A0` 等) を拒否 | SEC-10 |
 | UT-42 | rejectsInvalidUtf8 | 不正な UTF-8 (`61 FF` 等) を拒否 | SEC-10 |
+| UT-172 | rawMapValuesReturnTheReceivedBytesOfEachValue | マップの各値の受信バイト列 (範囲指定を含む)。マップ以外・キーの重複・末尾の余剰・値の欠落を拒否 | FR-24, SEC-10 |
 
 ### 1.2 CTAP2 (`Ctap2AuthenticatorTest`)
 
@@ -163,6 +165,7 @@
 | UT-104 | failedAttestationKeepsTheOldCredentialAndRemovesTheNewOne | 自己アテステーションの失敗で旧 credential が残り、新しい鍵は削除 | FR-04, FR-16 |
 | UT-105 | revokedOverwriteKeepsTheOldCredential | 認可の失効で旧 credential が残る | FR-04 |
 | UT-106 | equalityIncludesCounterAndLastUse | カウンタ・最終使用日時の違いを別の値として扱う (UI の更新) | FR-07 |
+| UT-173 | creationTimesIncreaseEvenWhenTheClockGoesBack | 作成日時は現在時刻と既存の最大値 + 1 の大きい方 | FR-04 |
 
 ### 1.9 外部検証器との照合 (`InteropVectorExport`)
 
@@ -249,6 +252,7 @@
 | UT-153 | userInformationCanBeUpdated | name の更新と displayName の削除、user.id の不一致 `0x02`、user の欠落 `0x14` | FR-24 |
 | UT-154 | everyOperationIsAuthorizedByTheGateWithoutConsumption | 認証付きのサブコマンドごとに `CREDENTIAL_MANAGEMENT` の認可を求め、消費しない。続きは認可を求めない。拒否で `0x27` | FR-24, FR-13 |
 | UT-155 | enumeratingWithNoCredentialsReturnsNoCredentials | credential がなければ RP の列挙は `0x2E`、件数は 0 | FR-24 |
+| UT-171 | pinUvAuthParamCoversTheReceivedBytesEvenWhenTheyAreNotCanonical | キー順序が canonical でない subCommandParams でも、受信バイト列の HMAC で検証が通る | FR-24 |
 
 ### 1.16 高水準のクライアントとの照合 (`InteropServer`)
 
@@ -271,6 +275,9 @@
 | UT-165 | builtInUvStillWorksWithAPinSet | PIN 設定後も内蔵 UV のトークン・`uv` オプションで登録できる | FR-22, FR-25 |
 | UT-166 | pinStoreIsSharedAcrossTransports | 2 つの認証器 (トランスポート) で PIN の状態と試行回数を共有する | FR-25 |
 | UT-167 | unreadablePinStorageIsTreatedAsSetAndRejectsPinOperations | 読み込めない PIN は clientPin true、PIN の操作は `0x7F`、長さ 0 のプローブは `0x31` | FR-25, SEC-10 |
+| UT-168 | tokensOnOtherTransportsAreRevokedByResetPinChangesAndClearing | 他のトランスポートでの setPIN・changePIN・Reset、PinStore の消去で、トークン (内蔵 UV・PIN) が `0x33` になる。GetInfo・鍵交換では失効しない | FR-22, FR-25, SEC-02 |
+| UT-169 | getPinRetriesDoesNotRequireAProtocol | getPINRetries は pinUvAuthProtocol を省略できる (指定時は対応を確認し `0x02`)。他のサブコマンドは必須 | FR-25 |
+| UT-170 | protocolOneAcceptsPaddingLongerThan64Bytes | 80 バイトのパディングは Protocol 1 で可、Protocol 2 で `0x02` | FR-25 |
 
 ## 2. CTAP 結合試験 (CT)
 
@@ -366,7 +373,7 @@ UV 必須の登録・認証が成功する (2026-11-05、CT-07)。
 |---|---|
 | FR-01 | UT-25〜33, 43〜50, CT-01 |
 | FR-02 | UT-34〜39, 51〜57, 68〜73, 80, IT-23, 27, 28 |
-| FR-04 / FR-05 | UT-11, 13〜16, 24, 82, 83, 87〜103, CT-02, CT-05, IT-01〜05 |
+| FR-04 / FR-05 | UT-11, 13〜16, 24, 82, 83, 87〜103, 173, CT-02, CT-05, IT-01〜05 |
 | FR-06 | UT-10, 32, CT-01, CT-05 |
 | FR-07〜FR-09 | UT-106, IT-01, 12, 13, 32 |
 | FR-10 | UT-23, IT-14 |
@@ -375,10 +382,10 @@ UV 必須の登録・認証が成功する (2026-11-05、CT-07)。
 | FR-17 / FR-18 | UT-19, 74, IT-17 |
 | FR-19 / FR-20 | IT-33 / UT-108〜111, IT-34, IT-35 |
 | FR-21 | UT-10, 107, 123〜131, 156, CT-05〜08 |
-| FR-22 | UT-10, 132〜140, 156, CT-07, CT-08 |
+| FR-22 | UT-10, 132〜140, 156, 168, CT-07, CT-08 |
 | FR-23 | UT-10, 141〜146, 150, CT-07, CT-08 |
-| FR-24 | UT-10, 147〜155, 159, CT-07, CT-08 |
-| FR-25 | UT-10, 157〜167, CT-07, CT-09, IT-37 |
+| FR-24 | UT-10, 147〜155, 159, 171, 172, CT-07, CT-08 |
+| FR-25 | UT-10, 157〜170, CT-07, CT-09, IT-37 |
 | FR-26 | CT-09, IT-36 |
 | NFR-03 / 04 / 07 / 09 / 10 | IT-22 / IT-15 / IT-20 / IT-21, 30 / IT-19 |
 | (品質: アクセシビリティ) | IT-29 |

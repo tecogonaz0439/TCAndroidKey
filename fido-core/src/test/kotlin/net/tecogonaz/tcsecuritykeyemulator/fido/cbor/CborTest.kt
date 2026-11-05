@@ -119,4 +119,25 @@ class CborTest {
         rejects("62C328") // 不完全な 2 バイト文字
         org.junit.Assert.assertEquals("é", Cbor.decode(net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.Hex.decode("62C3A9")))
     }
+
+    @Test
+    fun rawMapValuesReturnTheReceivedBytesOfEachValue() {
+        // {1: 2, 2: {"b": 1, "a": 2}} (内側のマップは canonical でない順序)
+        val inner = Hex.decode("A2616201616102")
+        val data = Hex.decode("A20102") + byteArrayOf(0x02) + inner
+        val raw = Cbor.rawMapValues(data)
+        assertEquals(setOf(1L, 2L), raw.keys)
+        assertArrayEquals(Hex.decode("02"), raw[1L])
+        assertArrayEquals(inner, raw[2L])
+        // 範囲を指定して読む (先頭のコマンドバイトを除く)
+        assertArrayEquals(inner, Cbor.rawMapValues(byteArrayOf(0x0A) + data, 1, data.size)[2L])
+
+        for (bad in listOf("8101", "A201020102", "A1010200", "A101")) {
+            try {
+                Cbor.rawMapValues(Hex.decode(bad))
+                org.junit.Assert.fail("expected CborException for $bad")
+            } catch (_: CborException) {
+            }
+        }
+    }
 }

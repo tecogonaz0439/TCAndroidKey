@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-06 |
-| 版数 | 1.5 |
+| 版数 | 1.6 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.6 (2026-11-05): コードレビュー (2026-11-05) の指摘への対応 (作成日時の単調性) |
 | 改訂 | 1.5 (2026-11-05): clientPIN の保存 (`pin.bin`、§3.4) を追加。§5 に `fido_hmac_`・PIN の暗号鍵を追加し、全削除でメタデータ暗号鍵も削除する記述に訂正 |
 | 改訂 | 1.4 (2026-11-05): `credProtect` 項目を追加。credentialManagement によるユーザー情報の更新を追記 |
 | 改訂 | 1.3 (2026-11-05): hmac-secret の HMAC 鍵と `hmacSecret` 項目を追加 |
@@ -41,7 +42,7 @@ root / file / database / sharedpref / external をすべて除外。
 | `user.name` | String? | ユーザー名 |
 | `user.displayName` | String? | 表示名 |
 | `discoverable` | Boolean | `rk: true` で登録されたか (パスキー) |
-| `createdAtMillis` | Long | 作成日時 (エポックミリ秒) |
+| `createdAtMillis` | Long | 作成日時 (エポックミリ秒)。既存のどの credential より大きくする (`nextCreatedAt`。時計が巻き戻っても上書き登録・discoverable の順序が崩れない) |
 | `lastUsedAtMillis` | Long? | 最終署名日時 |
 | `signCount` | Long | 署名カウンタ (作成時 0、署名毎 +1) |
 | `publicKeyX` / `publicKeyY` | ByteArray (32) | 公開鍵座標 |

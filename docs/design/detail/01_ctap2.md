@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-01 |
-| 版数 | 1.5 |
+| 版数 | 1.6 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.6 (2026-11-05): コードレビュー (2026-11-05) の指摘への対応。トークンを全トランスポートで失効 (§12.1)、credentialManagement の認証対象を受信バイト列に (§12.4)、getPINRetries の pinUvAuthProtocol を省略可 (§11.1、§13.2)、Protocol 1 の長いパディング (§13.4)、上書き登録の作成日時 (§3.2)、getUVRetries の不採用の理由 (§13.5) |
 | 改訂 | 1.5 (2026-11-05): clientPIN (PIN の設定・変更・照合、PIN によるトークンの発行) を追加 (§2、§3.3、§6、§8、§11.1、§12.5、§13) |
 | 改訂 | 1.4 (2026-11-05): CTAP 2.1 (pinUvAuthToken、credProtect、authenticatorCredentialManagement) を追加 (§1、§2、§3、§4、§6、§8、§11.1、§12) |
 | 改訂 | 1.3 (2026-11-05): hmac-secret 拡張と authenticatorClientPIN の getKeyAgreement を追加 (§2、§3、§4、§7、§8、§11) |
@@ -133,7 +134,7 @@ Android 実装の判定内容と Lease の寿命は DD-05 §2 を参照。
 | 10 | authenticatorData (§7) を作成。フラグ UP・AT、認可で UV 済みまたは pinUvAuthParam を検証済みなら UV。要求された拡張 (`credProtect`・`hmac-secret`) の出力があれば ED と拡張 | |
 | 11 | 有効性の確認 → アテステーション作成 (§3.4) | 署名不可 `0x27` |
 | 12 | 有効性の確認 (応答の直前) | 失効 `0x27` |
-| 13 | `rk: true` なら、同一 RP・同一 `user.id` で新しい credential より前に作成された discoverable credential を削除 (上書き登録) | 削除の失敗は無視 (旧 credential が残るだけ) |
+| 13 | `rk: true` なら、同一 RP・同一 `user.id` で新しい credential より前に作成された discoverable credential を削除 (上書き登録)。作成日時はストアが既存のどの credential より大きくする (時計の巻き戻しの影響を受けない)。作成日時で絞るのは、同時に進んだ 2 つの上書き登録で、先に完了した側が後から作られた credential を消さないため | 削除の失敗は無視 (旧 credential が残るだけ) |
 | 13a | pinUvAuthParam を使った場合は、トークンの UV フラグと権限を消す (§12.2) | |
 | 14 | `lease.complete(consumed = 成功)`。応答を返さなかった場合は、手順 9 で作成した credential を削除する | |
 
@@ -378,11 +379,11 @@ HKDF は `fido.pin.Hkdf` (RFC 5869) で実装し、RFC 5869 付録 A のテス�
 
 対応するサブコマンドは getPINRetries (0x01)、getKeyAgreement (0x02)、setPIN (0x03)、changePIN (0x04)、getPinToken (0x05)、
 getPinUvAuthTokenUsingUvWithPermissions (0x06。§12.1)、getPinUvAuthTokenUsingPinWithPermissions (0x09)。PIN に関するものは §13。
-getUVRetries (0x07) など、その他のサブコマンドは `0x3E INVALID_SUBCOMMAND`。
+getUVRetries (0x07) など、その他のサブコマンドは `0x3E INVALID_SUBCOMMAND` (getUVRetries を対応しない理由は §13.5)。
 
 | キー | 名前 | 型 | 必須 | 扱い |
 |---|---|---|---|---|
-| 0x01 | pinUvAuthProtocol | uint | ○ | 1 または 2。それ以外は `0x02 INVALID_PARAMETER` |
+| 0x01 | pinUvAuthProtocol | uint | ○ (getPINRetries では省略可。CTAP 2.1 §6.5.5) | 1 または 2。それ以外は `0x02 INVALID_PARAMETER` |
 | 0x02 | subCommand | uint | ○ | |
 
 getKeyAgreement の応答: `{1: keyAgreement}` (§10.1 の COSE_Key)。認可は不要 (鍵交換の公開鍵を返すだけで、鍵や credential を使わない)。
@@ -433,7 +434,7 @@ CredRandom の保管は DD-07 §6。
 
 | 状態 | 内容 |
 |---|---|
-| 使用中 | 発行で開始。次の場合に終了する: 発行から 19 秒以内に一度も使われない (NFC の既定の上限 19.8 秒以下)、発行から 600 秒が経過、発行時の Lease の失効 (受付の停止・前面離脱)、トランスポートのセッションの変化 (`resetSession`。NFC の切断など)、新しいトークンの発行、Reset |
+| 使用中 | 発行で開始。次の場合に終了する: 発行から 19 秒以内に一度も使われない (NFC の既定の上限 19.8 秒以下)、発行から 600 秒が経過、発行時の Lease の失効 (受付の停止・前面離脱)、トランスポートのセッションの変化 (`resetSession`。NFC の切断など)、新しいトークンの発行、Reset、共有の `PinStore` の版 (`revision`) の変化 (いずれかのトランスポートでの Reset・PIN の設定と変更、アプリでの全削除・PIN の消去。トークンはトランスポートごとに持つため、版で全トランスポートのトークンを失効させる) |
 | 権限 | mc (0x01)、ga (0x02)、cm (0x04)。未定義のビットは無視する |
 | 権限の RP ID | 発行時に指定された RP ID。指定がなければ最初の登録・認証で結び付ける |
 | UV フラグ | 発行時に立て、UP を伴う登録・認証で使った後に消す |
@@ -501,15 +502,18 @@ discoverable credential の件数の取得・列挙・削除・ユーザー情�
 | 0x03 | pinUvAuthProtocol | uint |
 | 0x04 | pinUvAuthParam | bytes |
 
+認証対象の subCommandParams は、受信したバイト列そのもの (`Cbor.rawMapValues`) を使う。デコードした値を再エンコードすると、
+canonical でない CBOR (キー順序の違い等) を送るクライアントの署名と一致しないため。
+
 | サブコマンド | 認証対象 (pinUvAuthParam) | 権限の RP ID | 応答 |
 |---|---|---|---|
 | getCredsMetadata (0x01) | `0x01` | なしのみ | `{1: 件数, 2: 残りの見積もり (1000 − 件数)}` |
 | enumerateRPsBegin (0x02) | `0x02` | なしのみ | `{3: rp, 4: rpIDHash, 5: totalRPs}` (RP ID の昇順) |
 | enumerateRPsGetNextRP (0x03) | — (続き) | — | `{3: rp, 4: rpIDHash}` |
-| enumerateCredentialsBegin (0x04) | `0x04 ‖ CBOR(subCommandParams)` | なし、または rpIDHash と一致 | `{6: user, 7: credentialID, 8: publicKey, 9: totalCredentials, 10: credProtect}` (作成日時の新しい順) |
+| enumerateCredentialsBegin (0x04) | `0x04 ‖ subCommandParams` | なし、または rpIDHash と一致 | `{6: user, 7: credentialID, 8: publicKey, 9: totalCredentials, 10: credProtect}` (作成日時の新しい順) |
 | enumerateCredentialsGetNextCredential (0x05) | — (続き) | — | 上と同じ (9 を除く) |
-| deleteCredential (0x06) | `0x06 ‖ CBOR(subCommandParams)` | なし、または credential の RP と一致 | なし |
-| updateUserInformation (0x07) | `0x07 ‖ CBOR(subCommandParams)` | なし、または credential の RP と一致 | なし。name・displayName を置き換える (指定がなければ削除)。user.id が異なれば `0x02` |
+| deleteCredential (0x06) | `0x06 ‖ subCommandParams` | なし、または credential の RP と一致 | なし |
+| updateUserInformation (0x07) | `0x07 ‖ subCommandParams` | なし、または credential の RP と一致 | なし。name・displayName を置き換える (指定がなければ削除)。user.id が異なれば `0x02` |
 
 | 条件 | ステータス |
 |---|---|
@@ -559,7 +563,7 @@ PIN そのものは保存せず、`LEFT(SHA-256(PIN), 16)` と残りの試行回
 
 | サブコマンド | パラメータ (キー) | 処理 | 応答 |
 |---|---|---|---|
-| getPINRetries (0x01) | 1 | 残りの試行回数と、連続 3 回の誤りでセッションの変更が必要か | `{3: pinRetries, 4: powerCycleState}` |
+| getPINRetries (0x01) | 1 (省略可) | 残りの試行回数と、連続 3 回の誤りでセッションの変更が必要か | `{3: pinRetries, 4: powerCycleState}` |
 | setPIN (0x03) | 1, 3 keyAgreement, 4 pinUvAuthParam, 5 newPinEnc | 未設定であること → 共有鍵 → `verify(共有鍵, newPinEnc, pinUvAuthParam)` → 新しい PIN の復号と検査 (§13.4) → 認可 (`CLIENT_PIN`) → 保存 | なし |
 | changePIN (0x04) | 1, 3, 4, 5, 6 pinHashEnc | 設定済み・残り 1 回以上 → 共有鍵 → `verify(共有鍵, newPinEnc ‖ pinHashEnc, pinUvAuthParam)` → 認可 (`CLIENT_PIN`) → 照合 (§13.3) → 新しい PIN の復号と検査 → 保存 → トークンをすべて作り直す | なし |
 | getPinToken (0x05。2.0 用) | 1, 3, 6 | permissions・rpId があれば `0x02`。照合の前提は changePIN と同じ → 認可 (`PIN_UV_AUTH_TOKEN`) → 照合 → トークンの発行 (権限 mc・ga) | `{2: encrypt(共有鍵, token)}` |
@@ -586,7 +590,7 @@ PIN そのものは保存せず、`LEFT(SHA-256(PIN), 16)` と残りの試行回
 
 | 項目 | 内容 | エラー |
 |---|---|---|
-| newPinEnc の復号結果 | 64 バイト (PIN を 0x00 でパディング) | `0x02` |
+| newPinEnc の復号結果 | Protocol 2 は 64 バイトちょうど (CTAP 2.1 §6.5.5.5)。Protocol 1 は 64 バイト以上 (CTAP 2.0 §5.5.5 の「minimum 64 bytes」に合わせ、2.0 のクライアントの長いパディングも受け付ける) | `0x02` |
 | PIN | 末尾の 0x00 を除いたもの | — |
 | 長さ | 4 コードポイント以上 (minPINLength)、63 バイト以下 | `0x37 PIN_POLICY_VIOLATION` |
 | 文字コード | UTF-8 として正しいこと | `0x37` |
@@ -600,5 +604,6 @@ PIN そのものは保存せず、`LEFT(SHA-256(PIN), 16)` と残りの試行回
 | PIN と内蔵 UV | PIN を設定しても内蔵 UV (受付ゲート) は使える。PIN がブロックされても内蔵 UV は止めない (CTAP 2.1 では両方を止めるが、本アプリの本人確認は端末の生体認証・画面ロックであり、PIN の試行回数で管理しない) |
 | PIN 設定済みでの UV の指定なしの要求 | `makeCredUvNotRqd: true` (§12.5) のとおり、`0x36 PUAT_REQUIRED` を返さない (すべての登録で受付ゲートの本人確認を経るため) |
 | アプリでの PIN の消去 | 試験の利便のため、登録済みのクレデンシャルを残したまま PIN だけを消せる (本人確認が必要。SEC-09)。アプリの全削除・Reset では PIN も消す |
-| 対象外 | forcePINChange、setMinPINLength、noMcGaPermissionsWithClientPin、getUVRetries |
+| getUVRetries (0x07) | 対応しない。CTAP 2.1 では任意 (§9 の必須要件に含まれず、応答の uvRetries も Optional)。本アプリの内蔵 UV は OS の生体認証・画面ロックであり、試行回数を数えられないため、実際と異なる値を返さない |
+| 対象外 | forcePINChange、setMinPINLength、noMcGaPermissionsWithClientPin |
 

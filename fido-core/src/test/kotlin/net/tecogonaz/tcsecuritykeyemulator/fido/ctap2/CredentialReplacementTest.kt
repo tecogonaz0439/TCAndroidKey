@@ -98,4 +98,13 @@ class CredentialReplacementTest {
         assertEquals(c, c.copy())
         assertNotEquals("list updates must not be swallowed by StateFlow", listOf(c), listOf(used))
     }
+
+    @Test
+    fun creationTimesIncreaseEvenWhenTheClockGoesBack() {
+        fun at(t: Long) = store.list().first().copy(createdAtMillis = t)
+        mc(1, authenticator())
+        assertEquals(500L, StoredCredential.nextCreatedAt(500L, emptyList()))
+        assertEquals(2_001L, StoredCredential.nextCreatedAt(500L, listOf(at(2_000L), at(1_000L))))
+        assertEquals(3_000L, StoredCredential.nextCreatedAt(3_000L, listOf(at(2_000L))))
+    }
 }

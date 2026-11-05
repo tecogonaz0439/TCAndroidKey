@@ -66,6 +66,12 @@ data class StoredCredential(
     override fun hashCode(): Int = id.contentHashCode()
 
     companion object {
+        /** 新しい credential の作成日時: 現在時刻と、既存の最大値 + 1 の大きい方 (時計が巻き戻っても単調に増える)。 */
+        fun nextCreatedAt(nowMillis: Long, existing: Collection<StoredCredential>): Long {
+            val latest = existing.maxOfOrNull { it.createdAtMillis } ?: return nowMillis
+            return maxOf(nowMillis, latest + 1)
+        }
+
         /**
          * 作成日時の新しい順 (CTAP 2.0 §5.2 / 2.1 §6.2.2 の discoverable credential の順序)。
          * 同時刻の場合は credential ID の順で決定的にする。
@@ -93,7 +99,11 @@ data class CredentialOptions(
  * 実装はスレッドセーフであること。
  */
 interface CredentialStore {
-    /** 新しい ES256 鍵ペア (と [options] に応じた付随する鍵) を生成し、クレデンシャルとして保存する。 */
+    /**
+     * 新しい ES256 鍵ペア (と [options] に応じた付随する鍵) を生成し、クレデンシャルとして保存する。
+     * 作成日時 (createdAtMillis) は既存のどの credential より大きくする ([StoredCredential.nextCreatedAt])。
+     * 上書き登録の判定 (DD-01 §3.2 手順 13) と discoverable の順序が、時計の巻き戻しで崩れないようにする。
+     */
     fun create(
         rpId: String,
         rpName: String?,

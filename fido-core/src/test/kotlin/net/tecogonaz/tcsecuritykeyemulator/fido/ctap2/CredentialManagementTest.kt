@@ -208,4 +208,21 @@ class CredentialManagementTest {
         assertEquals(CtapStatus.ERR_NO_CREDENTIALS, cm(2, token = token).first)
         assertEquals(0L, cm(1, token = token).second!![1L])
     }
+
+    @Test
+    fun pinUvAuthParamCoversTheReceivedBytesEvenWhenTheyAreNotCanonical() {
+        val ids = setup()
+        val token = client.uvToken(2, cm)
+        val descriptor = linkedMapOf("id" to ids.getValue("a1"), "type" to "public-key")
+        // user マップのキーを canonical でない順序 ("name" を "id" より前) で組み立てる
+        val user = byteArrayOf(0xA2.toByte()) + Cbor.encode("name") + Cbor.encode("reordered") +
+            Cbor.encode("id") + Cbor.encode(byteArrayOf(1))
+        val params = byteArrayOf(0xA2.toByte()) + Cbor.encode(2L) + Cbor.encode(descriptor) + Cbor.encode(3L) + user
+        val auth = token.authenticate(byteArrayOf(7) + params)
+        val request = byteArrayOf(CtapCommand.CREDENTIAL_MANAGEMENT.toByte(), 0xA4.toByte()) +
+            Cbor.encode(1L) + Cbor.encode(7L) + Cbor.encode(2L) + params +
+            Cbor.encode(3L) + Cbor.encode(2L) + Cbor.encode(4L) + Cbor.encode(auth)
+        assertEquals(CtapStatus.OK, authenticator.process(request)[0].toInt())
+        assertEquals("reordered", store.list().single { it.id.contentEquals(ids["a1"]) }.user.name)
+    }
 }

@@ -22,7 +22,7 @@ AI コーディングエージェント (Claude Code、Codex など) と開発�
   PIN/UV Auth Protocol 1 / 2 (`fido.pin`)、hmac-secret・credProtect 拡張、内蔵 UV・PIN による pinUvAuthToken、credentialManagement、
   clientPIN (PIN の設定・変更・照合。アプリでは状態の表示と消去)
 - 外部レビュー (ChatGPT Pro、対象 `ecd6e49`) の指摘 29 件は精査・対応済み。判定と不採用の理由は [review/FIX_PLAN.md](review/FIX_PLAN.md)
-- 単体テスト 167 件 (fido-core 163、app 4) 全件成功、lint 指摘 0 件。python-fido2 による照合 (DD-10 CT-05、CT-07) 成功
+- 単体テスト 173 件 (fido-core 169、app 4) 全件成功、lint 指摘 0 件。python-fido2 による照合 (DD-10 CT-05、CT-07) 成功
 - **未実施**:
   - 実機試験 ([DD-10](docs/design/detail/10_test-cases.md) の IT-01〜35、特に外部レビュー対応の IT-24〜32。hmac-secret・CTAP 2.1・clientPIN の CT-06・CT-08・CT-09、IT-36・IT-37)
   - 互換性マトリクスの記録 (DD-10 §4、[AP-C](docs/design/appendix/C_roadmap.md) F-01)

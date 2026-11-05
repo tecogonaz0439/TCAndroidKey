@@ -181,6 +181,7 @@ class ClientPinTest {
     fun unreadablePinStorageIsTreatedAsSetAndRejectsPinOperations() {
         val unavailable = object : PinStore {
             override fun status() = PinStatus(PinStatus.State.UNAVAILABLE, 0)
+            override val revision: Long = 0
             override fun setPin(pinHash: ByteArray): Boolean = error("unavailable")
             override fun check(pinHash: ByteArray): PinCheck = error("unavailable")
             override fun changePin(pinHash: ByteArray) = error("unavailable")
@@ -194,5 +195,58 @@ class ClientPinTest {
         val probe = c.makeCredentialParams(cdh) + (8L to ByteArray(0)) + (9L to 2L)
         assertEquals(CtapStatus.ERR_PIN_INVALID, c.status(CtapCommand.MAKE_CREDENTIAL, probe))
         assertNull(c.requestPinToken(2, pin).second)
+    }
+
+    @Test
+    fun tokensOnOtherTransportsAreRevokedByResetPinChangesAndClearing() {
+        val other = CtapTestClient(Ctap2Authenticator(store, policy, { config }, "other", pinStore = pinStore))
+        val mc = ClientPin.PERMISSION_MC.toLong()
+        var user: Byte = 0
+        fun register(token: CtapTestClient.Token) =
+            client.status(CtapCommand.MAKE_CREDENTIAL, client.makeCredentialParams(cdh, userId = byteArrayOf(++user), token = token))
+
+        // 他のトランスポートの GetInfo・鍵交換はトークンを無効にしない
+        val control = client.uvToken(2, mc)
+        other.call(CtapCommand.GET_INFO)
+        other.keyAgreement(2)
+        assertEquals(CtapStatus.OK, register(control))
+
+        // 他のトランスポートでの PIN の設定・変更
+        val beforeSet = client.uvToken(2, mc)
+        assertEquals(CtapStatus.OK, other.setPin(2, pin))
+        assertEquals(CtapStatus.ERR_PIN_AUTH_INVALID, register(beforeSet))
+        val pinToken = client.requestPinToken(2, pin, mc).second!!
+        assertEquals(CtapStatus.OK, other.changePin(2, pin, "5678"))
+        assertEquals(CtapStatus.ERR_PIN_AUTH_INVALID, register(pinToken))
+
+        // アプリでの PIN の消去・全削除
+        val beforeClear = client.uvToken(2, mc)
+        pinStore.clear()
+        assertEquals(CtapStatus.ERR_PIN_AUTH_INVALID, register(beforeClear))
+
+        // 他のトランスポートでの Reset (PIN 未設定でも内蔵 UV のトークンを無効にする)
+        config = config.copy(allowReset = true)
+        val beforeReset = client.uvToken(2, mc)
+        assertEquals(CtapStatus.OK, other.status(CtapCommand.RESET))
+        assertEquals(CtapStatus.ERR_PIN_AUTH_INVALID, register(beforeReset))
+    }
+
+    @Test
+    fun getPinRetriesDoesNotRequireAProtocol() {
+        client.setPin(2, pin)
+        val (status, resp) = client.call(CtapCommand.CLIENT_PIN, linkedMapOf(2L to 1L))
+        assertEquals(CtapStatus.OK, status)
+        assertEquals(8L, resp!![3L])
+        assertEquals(CtapStatus.ERR_INVALID_PARAMETER, client.status(CtapCommand.CLIENT_PIN, linkedMapOf(1L to 3L, 2L to 1L)))
+        // その他のサブコマンドは従来どおり必須
+        assertEquals(CtapStatus.ERR_MISSING_PARAMETER, client.status(CtapCommand.CLIENT_PIN, linkedMapOf(2L to 2L)))
+    }
+
+    @Test
+    fun protocolOneAcceptsPaddingLongerThan64Bytes() {
+        // CTAP 2.0 は「64 バイト以上」、CTAP 2.1 は 64 バイトちょうど
+        assertEquals(CtapStatus.ERR_INVALID_PARAMETER, client.setPin(2, "", padded = client.padPin(pin).copyOf(80)))
+        assertEquals(CtapStatus.OK, client.setPin(1, "", padded = client.padPin(pin).copyOf(80)))
+        assertEquals(CtapStatus.OK, client.requestPinToken(2, pin).first)
     }
 }

@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-04 |
-| 版数 | 1.5 |
+| 版数 | 1.6 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.6 (2026-11-05): コードレビュー (2026-11-05) の指摘への対応 (`Cbor.rawMapValues`、`PinStore.revision`、`StoredCredential.nextCreatedAt`) |
 | 改訂 | 1.5 (2026-11-05): `PinStore`・`InMemoryPinStore`・`KeystorePinStore`、`ClientPin` の PIN 関連サブコマンドを追加 |
 | 改訂 | 1.4 (2026-11-05): `CredentialManagement`・`CredProtect`、`ClientPin` の pinUvAuthToken、`CredentialStore.updateUser`、`CtapOperation` の追加 |
 | 改訂 | 1.3 (2026-11-05): `ClientPin`・`HmacSecret`・`CredentialOptions`、`CredentialStore.credRandom` を追加 |
@@ -105,6 +106,7 @@ classDiagram
 | `Cbor.encode(value)` | Kotlin 値 (Int/Long/ByteArray/String/List/Map/Boolean/null/Double) を canonical CBOR に変換 |
 | `Cbor.decode(data, offset, length)` | 1 データ項目をデコード (末尾余剰・非最短表現・タグ・不正 UTF-8 はエラー。DD-01 §1.2) |
 | `Cbor.decodeFirst(data, offset)` | 先頭 1 項目をデコードし消費バイト数を返す (authenticatorData 内の COSE_Key 解析用) |
+| `Cbor.rawMapValues(data, offset, length)` | マップの各値の受信したままのバイト列 (credentialManagement の認証対象用。DD-01 §12.4) |
 | `CborException` | CBOR の不正 |
 | `Map<*,*>.int/bytes/text/map/list/bool/has` | 整数キー (`Int` → `Long` 正規化) によるマップアクセス |
 
@@ -116,12 +118,12 @@ classDiagram
 | `CredentialStore` | 鍵保管の抽象 (スレッドセーフであること)。`create(…, options)`、`credRandom(credential, userVerified)` (hmac-secret。CredRandom がなければ null)、`updateUser(id, user)` (credentialManagement) |
 | `CredentialOptions` | 登録時の属性 (`hmacSecret`、`credProtect`) |
 | `ClientPin` | authenticatorClientPIN (0x06。DD-01 §11.1、§13)、PIN の照合と連続の誤りの管理、プロトコルごとの `PinUvAuthProtocol` と pinUvAuthToken の状態 (DD-01 §12.1)。`verifyForOperation` (MC / GA)、`verifyForCredentialManagement`、`onUserPresentOperation` (使用後の権限の消去)、`isTokenInUse`、`reset()` (Reset 時)。時計とセッションの世代を注入する |
-| `PinStore` / `PinStatus` / `PinCheck` | clientPIN の保存の抽象 (DD-01 §13.1)。全トランスポートで共有するためスレッドセーフであること。`status`、`setPin`、`check` (回数を減らしてから照合)、`changePin`、`clear` |
+| `PinStore` / `PinStatus` / `PinCheck` | clientPIN の保存の抽象 (DD-01 §13.1)。全トランスポートで共有するためスレッドセーフであること。`status`、`setPin`、`check` (回数を減らしてから照合)、`changePin`、`clear`、`revision` (設定・変更・消去で増える版。全トランスポートのトークンの失効に使う) |
 | `InMemoryPinStore` | メモリ上の `PinStore` (単体テスト・`Ctap2Authenticator` の既定値) |
 | `CredentialManagement` | authenticatorCredentialManagement (0x0A。DD-01 §12.4)。列挙の途中状態を持ち、他のコマンドで破棄する |
 | `CredProtect` | credProtect 拡張 (DD-01 §12.3)。登録の要求の解釈と、認証での絞り込み |
 | `HmacSecret` / `HmacSecretInput` | hmac-secret 拡張 (DD-01 §11.2)。登録の要求の判定、認証の入力の検証と salt の復号、出力の暗号化 |
-| `StoredCredential` | クレデンシャルのメタデータ (DD-06 §2。`hmacSecret`・`credProtect` を含む)。秘密鍵は含まない。等価性は全フィールドの内容 (StateFlow の更新を抑止しないため)。同一性は `isSameCredential`。並び順 `NEWEST_FIRST` (作成日時の新しい順、同時刻は ID 順) |
+| `StoredCredential` | クレデンシャルのメタデータ (DD-06 §2。`hmacSecret`・`credProtect` を含む)。秘密鍵は含まない。等価性は全フィールドの内容 (StateFlow の更新を抑止しないため)。同一性は `isSameCredential`。並び順 `NEWEST_FIRST` (作成日時の新しい順、同時刻は ID 順)。`nextCreatedAt` (既存の最大値より大きい作成日時) |
 | `UserEntity` | `id` / `name` / `displayName` |
 | `KeySecurityLevel` | `STRONGBOX` / `TEE` / `SOFTWARE` / `UNKNOWN` |
 | `AuthorizationPolicy` / `AuthorizationRequest` / `AuthorizationResult` / `CtapOperation` | 認可の抽象 (DD-01 §1.4)。操作種別に `PIN_UV_AUTH_TOKEN`・`CREDENTIAL_MANAGEMENT` (ワンタイムを消費しない) を含む |

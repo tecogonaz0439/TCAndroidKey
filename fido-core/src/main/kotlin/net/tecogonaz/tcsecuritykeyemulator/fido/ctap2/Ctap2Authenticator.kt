@@ -120,7 +120,9 @@ class Ctap2Authenticator(
                     params ?: throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
                 ) { authorizeOrThrow(it, keepAlive) }
                 CtapCommand.CREDENTIAL_MANAGEMENT -> credentialManagement.process(
-                    params ?: throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
+                    params ?: throw CtapException(CtapStatus.ERR_MISSING_PARAMETER),
+                    // params のデコードに成功しているため、同じバイト列の分割は失敗しない
+                    Cbor.rawMapValues(request, 1, request.size - 1)
                 ) { authorizeOrThrow(it, keepAlive) }
                 CtapCommand.RESET -> reset(keepAlive)
                 CtapCommand.SELECTION -> selection(keepAlive)
@@ -460,6 +462,10 @@ class Ctap2Authenticator(
     /**
      * [newCredential] と同じ RP・user.id で、それ以前に作成された discoverable credential を削除する。
      * 削除に失敗しても新しい登録は有効なまま (旧 credential が残るだけ) とする。
+     *
+     * 作成日時の条件は、2 つの上書き登録が同時に進んだ場合 (ワンタイム OFF で NFC と Bluetooth など) に、
+     * 先に完了した側が後から作られた credential を消さないためのもの。作成日時はストアが単調に増やす
+     * ([CredentialStore.create]) ため、時計の巻き戻しの影響を受けない。
      */
     private fun replaceOlderDiscoverable(newCredential: StoredCredential) {
         store.findDiscoverable(newCredential.rpId)

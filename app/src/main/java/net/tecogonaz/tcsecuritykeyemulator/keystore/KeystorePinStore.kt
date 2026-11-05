@@ -30,7 +30,8 @@ import javax.crypto.spec.GCMParameterSpec
  * (`tcsecuritykeyemulator_pin_v1`、ユーザー認証不要) で暗号化して `files/pin.bin` に保存する。
  *
  * - ファイルがなければ未設定。ファイルがあるのに読めなければ UNAVAILABLE とし、上書きしない ([clear] による初期化のみ可能)
- * - 試行回数は照合の前に減らして保存する (保存できなければ照合しない)
+ * - 試行回数は照合の前に減らして保存する (保存できなければ照合しない)。一致した後の回復の保存に失敗した場合は、
+ *   照合の成功として扱い、試行回数は保存済みの値 (減った値) のままにする (次に一致した照合で回復する)
  * - 状態の変更は保存に成功してからメモリと [status] に反映する
  */
 class KeystorePinStore(context: Context) : PinStore {
@@ -40,6 +41,10 @@ class KeystorePinStore(context: Context) : PinStore {
     private var loaded = false
     private var record: Record? = null
     private var error: String? = null
+
+    @Volatile
+    override var revision: Long = 0
+        private set
 
     private val _state = MutableStateFlow(PinStatus(PinStatus.State.NOT_SET, PinStore.MAX_RETRIES))
 
@@ -60,6 +65,7 @@ class KeystorePinStore(context: Context) : PinStore {
         requireAvailable()
         if (record != null) return false
         commit(Record(pinHash.copyOf(), PinStore.MAX_RETRIES))
+        revision++
         return true
     }
 
@@ -70,7 +76,9 @@ class KeystorePinStore(context: Context) : PinStore {
         val decremented = current.copy(retries = current.retries - 1)
         commit(decremented)
         if (!MessageDigest.isEqual(current.pinHash, pinHash)) return PinCheck.Mismatch(decremented.retries)
-        commit(current.copy(retries = PinStore.MAX_RETRIES))
+        // 正しい PIN を、回復の保存の失敗 (一時的な書き込みの失敗など) で 0x7F にしない。
+        // commit は保存に成功した場合のみメモリに反映するため、失敗時もメモリとディスクは一致したまま (減った値) になる。
+        runCatching { commit(current.copy(retries = PinStore.MAX_RETRIES)) }
         return PinCheck.Match
     }
 
@@ -78,6 +86,7 @@ class KeystorePinStore(context: Context) : PinStore {
     override fun changePin(pinHash: ByteArray) {
         requireAvailable()
         commit(Record(pinHash.copyOf(), PinStore.MAX_RETRIES))
+        revision++
     }
 
     /** PIN を消す。読み込めない状態からの初期化にも使う (暗号鍵も作り直す)。 */
@@ -88,6 +97,7 @@ class KeystorePinStore(context: Context) : PinStore {
         record = null
         error = null
         loaded = true
+        revision++
         publish()
     }
 
