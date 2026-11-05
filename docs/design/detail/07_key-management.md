@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-07 |
-| 版数 | 1.2 |
+| 版数 | 1.3 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.3 (2026-11-05): クライアントからの削除 (credentialManagement) を §5 に追加 |
 | 改訂 | 1.2 (2026-11-05): hmac-secret の HMAC 鍵 (§1、§4.1、§5、§6) を追加 |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応 (保存成功後の反映、上書き登録の順序、読み込めない場合の初期化)。`review/FIX_PLAN.md` |
 | 実装 | `app/.../keystore/KeystoreCredentialStore.kt`, `MetadataStore.kt` |
@@ -93,6 +94,7 @@ stateDiagram-v2
 | 全削除 (FR-09) | `fido_cred_`・`fido_hmac_` で始まる全エイリアスを削除、メタデータファイルとメタデータの暗号鍵を削除、キャッシュ消去 | 必要 |
 | 初期化 (読み込めない場合) | 全削除と同じ (画面 SC-02 の「初期化 (すべて削除)」) | 必要 |
 | OS からのリセット (FR-10) | 全削除と同じ | 設定で許可 (変更時に本人確認) + 認可 |
+| クライアントからの削除 (FR-24) | credentialManagement の deleteCredential。個別削除と同じ処理 | cm 権限の pinUvAuthToken (内蔵 UV = 本人確認で発行) + 認可 (DD-01 §12.4) |
 | 同一ユーザー再登録 | 新しい credential の完成後に、それ以前に作成された同一ユーザーの discoverable credential を個別削除 | 登録の認可に含む |
 
 削除処理は画面操作の場合 `Dispatchers.IO` で実行し、失敗はイベントログに記録する。

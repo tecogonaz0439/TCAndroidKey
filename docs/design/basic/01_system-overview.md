@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-BD-01 |
-| 版数 | 1.0 |
+| 版数 | 1.1 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.1 (2026-11-05): 仕様の対応範囲を CTAP 2.0 / 2.1 (hmac-secret・credProtect・credentialManagement) に更新 |
 | 関連文書 | BD-02 要件定義、BD-04 外部インターフェース、BD-05 セキュリティ方針 |
 
 ## 1. 目的
@@ -38,7 +39,7 @@ FIDO / FIDO2 (WebAuthn) に対応した Web アプリケーションを開発・
   端末 OS・アプリの脆弱性の影響を受ける範囲が物理キーより広い。
 - **認定・検証の欠如**: FIDO 認定試験・第三者評価を受けていない。
 - **可用性**: バックアップ不可、アンインストールで消失、端末の故障・紛失で即喪失する。
-- **仕様の対応範囲**: CTAP 2.0 のサブセット (clientPIN・U2F・拡張機能は非対応) であり、RP によっては利用できない (AP-C)。
+- **仕様の対応範囲**: CTAP 2.0 / 2.1 のサブセット (clientPIN・U2F・largeBlob 等は非対応) であり、RP によっては利用できない (AP-C)。
 
 これらは「テスト用ツール」としては許容できるが、本番アカウントを保護する認証器としては不十分であるため、PRE-02 を設ける。
 
@@ -73,8 +74,8 @@ flowchart LR
 
 | 区分 | 内容 |
 |---|---|
-| 対象 | CTAP 2.0 認証器 (ES256)、NFC (HCE)、Bluetooth HID (実験的)、Android Keystore による鍵保管、クレデンシャルの一覧・個別削除・全削除、本人確認 (BiometricPrompt) による認可、日本語・英語 UI |
-| 対象外 | USB 接続 (技術的に不可)、clientPIN / CTAP 2.1 / U2F (CTAP1)、WebAuthn 拡張 (hmac-secret, credProtect, largeBlob 等)、鍵のバックアップ・同期、エンタープライズアテステーション、Google Play での配布 |
+| 対象 | CTAP 2.0 / 2.1 認証器 (ES256、内蔵 UV による pinUvAuthToken、hmac-secret・credProtect 拡張、credentialManagement)、NFC (HCE)、Bluetooth HID (実験的)、Android Keystore による鍵保管、クレデンシャルの一覧・個別削除・全削除、本人確認 (BiometricPrompt) による認可、日本語・英語 UI |
+| 対象外 | USB 接続 (技術的に不可)、clientPIN / U2F (CTAP1)、authenticatorConfig、拡張 (largeBlob、minPinLength 等)、鍵のバックアップ・同期、エンタープライズアテステーション、Google Play での配布 |
 
 ## 5. システム構成
 

@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-BD-04 |
-| 版数 | 1.2 |
+| 版数 | 1.3 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.3 (2026-11-05): CTAP 2.1 (pinUvAuthToken、credProtect、credentialManagement) を追加。python-fido2 の `Fido2Client` の想定を更新 |
 | 改訂 | 1.2 (2026-11-05): ClientPIN (getKeyAgreement のみ) と hmac-secret 拡張を追加 |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応 (GET RESPONSE の CLA、拡張長応答、互換性の注記)。`review/FIX_PLAN.md` |
 | 関連文書 | DD-01 CTAP2、DD-02 NFC、DD-03 Bluetooth HID |
@@ -21,16 +22,17 @@
 
 ## 2. 上位プロトコル (共通)
 
-全トランスポートで **CTAP 2.0** (FIDO Client to Authenticator Protocol) のコマンドを処理する。
+全トランスポートで **CTAP 2.0 / 2.1** (FIDO Client to Authenticator Protocol) のコマンドを処理する (DD-01 §12.5)。
 
 | 項目 | 内容 |
 |---|---|
-| バージョン | `FIDO_2_0` |
-| 対応コマンド | GetInfo (0x04)、MakeCredential (0x01)、GetAssertion (0x02)、GetNextAssertion (0x08)、ClientPIN (0x06、getKeyAgreement のみ)、Reset (0x07)、Selection (0x0B) |
-| 拡張 | hmac-secret (PIN/UV Auth Protocol 1 の鍵交換) |
-| 非対応 | ClientPIN の PIN 関連サブコマンド、CredentialManagement (0x0A)、CTAP1/U2F |
+| バージョン | `FIDO_2_0`、`FIDO_2_1` |
+| 対応コマンド | GetInfo (0x04)、MakeCredential (0x01)、GetAssertion (0x02)、GetNextAssertion (0x08)、ClientPIN (0x06、getKeyAgreement・getPinUvAuthTokenUsingUvWithPermissions)、Reset (0x07)、Selection (0x0B)、CredentialManagement (0x0A) |
+| 拡張 | hmac-secret、credProtect |
+| PIN/UV Auth Protocol | 2、1 |
+| 非対応 | ClientPIN の PIN 関連サブコマンド、authenticatorConfig (0x0D)、largeBlobs (0x0C)、CTAP1/U2F |
 | アルゴリズム | ES256 (COSE -7、ECDSA P-256 / SHA-256) |
-| ユーザー検証 | 内蔵 UV (`uv: true`)。PIN は使わない |
+| ユーザー検証 | 内蔵 UV (`uv: true`、内蔵 UV による pinUvAuthToken)。PIN は使わない |
 | アテステーション | `none` (既定) / `packed` 自己アテステーション |
 | AAGUID | `523283ca-3c2c-48b5-8bff-a722f900e190` |
 
@@ -72,7 +74,7 @@
 |---|---|---|---|
 | Windows 11 + Edge / Chrome | NFC (RC-S300/P) | 利用可の想定 | Windows の WebAuthn API が PC/SC リーダー経由の NFC セキュリティキーを扱う。RC-S300 には Sony の PC/SC ドライバーが必要 |
 | Windows 11 + python-fido2 2.0.0 (低水準 `Ctap2`) | NFC (RC-S300/P) | 利用可の想定 | CTAP レベルの確認用 (`scripts/test/fido2_nfc_test.py`)。応答形式は実機なしで python-fido2 により検証済み (DD-10 CT-05) |
-| python-fido2 2.0.0 (高水準 `Fido2Client`) | NFC | UV required は利用不可の見込み | 内蔵 UV の前に PIN/UV プロトコルを選択し、`pinUvAuthProtocols` のない認証器で例外になる (クライアント側の制約。DD-10 §4 注 1) |
+| python-fido2 2.0.0 (高水準 `Fido2Client`) | NFC | 利用可の想定 | 内蔵 UV で pinUvAuthToken を得る。UV 必須・PRF・資格情報の管理を実機なしで確認済み (DD-10 CT-07)。実機は CT-08 |
 | libfido2 系 (`fido2-token` 等) | NFC (PC/SC) | 利用可の想定 | GET RESPONSE に `80 C0` を使う (1.1 で対応) |
 | macOS 27 + Chrome | NFC | 利用不可 | macOS の Chrome は PC/SC 経由の NFC セキュリティキーに非対応 |
 | macOS 27 + Safari | NFC | 未確認 | スマートカードリーダー経由の NFC セキュリティキーを扱える可能性がある |
@@ -83,7 +85,8 @@
 実際の結果は試験 (DD-10) で、クライアントの版と API 層を含めて記録する。
 
 > **注 (タッチ確認用の登録)**: CTAP 2.0 の認証器に対して、Chromium 系の FIDO 実装は認証器の選択のために
-> ダミーの MakeCredential でタッチを確認することがある。本アプリはこれを通常の登録として扱うため、ワンタイム ON では
+> ダミーの MakeCredential でタッチを確認することがある (CTAP 2.1 の認証器には authenticatorSelection を使う。
+> 本アプリは `FIDO_2_1` を名乗るため、2.1 に対応したクライアントではこの経路を通らない見込み)。本アプリはこれを通常の登録として扱うため、ワンタイム ON では
 > 受付を消費し、後続の本来の要求が失敗し得る。今回の試験環境 (Windows は webauthn.dll、Android は Google Play 開発者サービス、
 > macOS の Chrome は NFC 非対応) では該当経路を通らない見込みだが、実機で確認する (DD-10 IT-31)。
 > ダミー RP 名による特別扱いは、相手が同じ値を送れるため行わない。

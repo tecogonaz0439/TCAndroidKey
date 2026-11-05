@@ -74,6 +74,8 @@
     <string name="credential_discoverable">パスキー (検出可能)</string>
     <string name="credential_non_discoverable">非検出 (サーバー側保持)</string>
     <string name="credential_hmac_secret">hmac-secret (PRF)</string>
+    <string name="credential_cred_protect_list">credProtect 2: UV または ID 指定</string>
+    <string name="credential_cred_protect_required">credProtect 3: UV 必須</string>
     <string name="security_level_strongbox">StrongBox</string>
     <string name="security_level_tee">TEE</string>
     <string name="security_level_software">ソフトウェア</string>
@@ -145,7 +147,7 @@
     <string name="about_version">バージョン</string>
     <string name="about_aaguid">AAGUID</string>
     <string name="about_protocols">プロトコル</string>
-    <string name="about_protocols_value" tools:ignore="TypographyDashes">CTAP 2.0 (FIDO_2_0) over NFC (ISO 7816-4 / HCE)、CTAPHID over Bluetooth HID (実験的)</string>
+    <string name="about_protocols_value" tools:ignore="TypographyDashes">CTAP 2.0 / 2.1 (FIDO_2_0、FIDO_2_1) over NFC (ISO 7816-4 / HCE)、CTAPHID over Bluetooth HID (実験的)</string>
     <string name="about_algorithms">アルゴリズム</string>
     <string name="about_security">セキュリティ</string>
     <string name="about_security_text">秘密鍵は Android キーストア (StrongBox または TEE) 内で生成され、取り出せません。各鍵は本人確認から一定時間内・端末ロック解除中・本アプリが前面表示中にのみ使用できます。</string>

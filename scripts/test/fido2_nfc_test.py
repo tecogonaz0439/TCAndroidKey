@@ -22,10 +22,16 @@ CTAP2 の GetInfo → MakeCredential → GetAssertion を実行し、署名を�
          python3 scripts/test/fido2_nfc_test.py            # 全ステップ
          python3 scripts/test/fido2_nfc_test.py --info     # GetInfo のみ
          python3 scripts/test/fido2_nfc_test.py --hmac-secret  # hmac-secret 拡張も確認する
+         python3 scripts/test/fido2_nfc_test.py --client       # 高水準 API (Fido2Client) で CTAP 2.1 の機能を確認する
 
 --hmac-secret の確認内容 (DD-10 CT-06):
     - 登録の拡張出力が {"hmac-secret": true} であること
     - 認証で salt 2 つの出力 (各 32 バイト) を復号でき、2 回目の認証で同じ値になること
+
+--client の確認内容 (DD-10 CT-08。interop_client_e2e.py と同じシナリオ):
+    - Fido2Client で UV 必須・パスキー・PRF・credProtect 3 の登録 (内蔵 UV の pinUvAuthToken)
+    - PRF 付きの認証 3 回 (同じ salt で同じ値、異なる salt で異なる値)
+    - CredentialManagement による列挙・ユーザー情報の更新・削除
 """
 import argparse
 import hashlib
@@ -82,6 +88,25 @@ def assert_hmac_secret(ctap, cred, salts):
     return output
 
 
+def run_client_scenario(dev):
+    """interop_client_e2e.run_scenario を NFC のデバイスで実行する (操作ごとに再度の本人確認を求める)。"""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from interop_client_e2e import run_scenario
+
+    state = {"dev": dev, "first": True}
+
+    def connect(prompt):
+        if state["first"]:
+            state["first"] = False
+            print(f"\n{prompt}")
+            return state["dev"]
+        state["dev"] = wait_rearm(state["dev"], f"{prompt} ワンタイム ON の場合は、アプリで再度「本人確認して開始」を実行してください。")
+        return state["dev"]
+
+    run_scenario(connect)
+    print("\nすべて成功しました。")
+
+
 def wait_rearm(dev, prompt):
     input(f"\n{prompt}\n準備ができたら Enter (端末はリーダーから一度離して載せ直す) > ")
     return find_device(30)
@@ -91,6 +116,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--info", action="store_true", help="GetInfo のみ実行")
     ap.add_argument("--hmac-secret", action="store_true", help="hmac-secret 拡張の登録・認証も確認する")
+    ap.add_argument("--client", action="store_true", help="高水準 API (Fido2Client) で CTAP 2.1 の機能を確認する")
     ap.add_argument("--timeout", type=float, default=30)
     args = ap.parse_args()
 
@@ -106,6 +132,9 @@ def main():
     print(f"pinUvAuthProtocols: {info.pin_uv_protocols}")
     print(f"transports: {getattr(info, 'transports', None)}")
     if args.info:
+        return
+    if args.client:
+        run_client_scenario(dev)
         return
 
     # --- 登録 (discoverable credential) ---

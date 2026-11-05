@@ -109,7 +109,8 @@ class HmacSecretTest {
         assertEquals(-25L, key[3L])
         assertEquals(1L, key[-1L])
 
-        assertEquals(CtapStatus.ERR_INVALID_PARAMETER, call(CtapCommand.CLIENT_PIN, linkedMapOf(1L to 2L, 2L to 2L)).first)
+        assertEquals(2L, (call(CtapCommand.CLIENT_PIN, linkedMapOf(1L to 2L, 2L to 2L)).second!![1L] as Map<*, *>)[1L])
+        assertEquals(CtapStatus.ERR_INVALID_PARAMETER, call(CtapCommand.CLIENT_PIN, linkedMapOf(1L to 3L, 2L to 2L)).first)
         assertEquals(CtapStatus.ERR_MISSING_PARAMETER, call(CtapCommand.CLIENT_PIN, linkedMapOf(1L to 1L)).first)
         assertEquals(CtapStatus.ERR_MISSING_PARAMETER, call(CtapCommand.CLIENT_PIN).first)
         assertEquals(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE, call(CtapCommand.CLIENT_PIN, linkedMapOf(1L to "1", 2L to 2L)).first)
@@ -212,7 +213,8 @@ class HmacSecretTest {
         val cases = listOf(
             badAuth to CtapStatus.ERR_PIN_AUTH_INVALID,
             badLength to CtapStatus.ERR_INVALID_PARAMETER,
-            (valid + (4L to 2L)) to CtapStatus.ERR_INVALID_PARAMETER,      // Protocol 2 は未対応
+            (valid + (4L to 3L)) to CtapStatus.ERR_INVALID_PARAMETER,      // 未対応のプロトコル
+            (valid + (4L to 2L)) to CtapStatus.ERR_PIN_AUTH_INVALID,       // Protocol 1 で作った入力を Protocol 2 として送る
             offCurve to CtapStatus.ERR_INVALID_PARAMETER,
             (valid - 3L) to CtapStatus.ERR_MISSING_PARAMETER,
             (valid + (2L to "x")) to CtapStatus.ERR_CBOR_UNEXPECTED_TYPE,

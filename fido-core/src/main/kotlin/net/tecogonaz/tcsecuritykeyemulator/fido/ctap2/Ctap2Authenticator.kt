@@ -14,12 +14,13 @@ import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
 
 /**
- * CTAP 2.0 認証器 (FIDO2 セキュリティキー) のコマンド処理本体。トランスポート (NFC / HID) には依存しない。
+ * CTAP 2.0 / 2.1 認証器 (FIDO2 セキュリティキー) のコマンド処理本体。トランスポート (NFC / HID) には依存しない。
  *
- * 対応コマンド: GetInfo / MakeCredential / GetAssertion / GetNextAssertion / ClientPIN (getKeyAgreement のみ) /
- * Reset / Selection。拡張は hmac-secret。
+ * 対応コマンド: GetInfo / MakeCredential / GetAssertion / GetNextAssertion / ClientPIN (getKeyAgreement、
+ * getPinUvAuthTokenUsingUvWithPermissions) / Reset / Selection / CredentialManagement。拡張は credProtect・hmac-secret。
  * 署名アルゴリズムは ES256 (P-256) のみ。PIN は未対応で、ユーザー検証は端末内蔵 UV
- * (生体認証・画面ロック資格情報) として [AuthorizationPolicy] に委譲する。
+ * (生体認証・画面ロック資格情報) として [AuthorizationPolicy] に委譲する。pinUvAuthToken を使った要求でも、
+ * 登録・認証・資格情報の管理のたびに [AuthorizationPolicy] の許可を得る。
  *
  * 1 つのトランスポートにつき 1 インスタンスを使う (GetNextAssertion の状態を保持するため)。
  *
@@ -60,8 +61,15 @@ class Ctap2Authenticator(
     @Volatile
     private var pending: PendingAssertions? = null
 
-    /** PIN/UV Auth Protocol の状態 (鍵交換の鍵)。`process` の直列化の内側でのみ使う。 */
-    private val clientPin = ClientPin()
+    /** トランスポートのセッションの世代。[resetSession] で進め、pinUvAuthToken と列挙の途中状態を無効にする。 */
+    @Volatile
+    private var sessionEpoch = 0L
+
+    /** PIN/UV Auth Protocol の状態 (鍵交換の鍵・pinUvAuthToken)。`process` の直列化の内側でのみ使う。 */
+    private val clientPin = ClientPin(monotonicClock, { sessionEpoch })
+
+    /** credentialManagement の列挙の途中状態。`process` の直列化の内側でのみ使う。 */
+    private val credentialManagement = CredentialManagement(store, clientPin, monotonicClock) { sessionEpoch }
 
     /**
      * CTAP2 リクエスト (先頭 1 バイトがコマンド、以降が CBOR パラメータ) を処理し、
@@ -77,6 +85,7 @@ class Ctap2Authenticator(
         if (request.isEmpty()) return byteArrayOf(CtapStatus.ERR_INVALID_LENGTH.toByte())
         val command = request[0].toInt() and 0xFF
         if (command != CtapCommand.GET_NEXT_ASSERTION) pending = null
+        if (command != CtapCommand.CREDENTIAL_MANAGEMENT) credentialManagement.reset()
         var rpId: String? = null
         var userName: String? = null
         return try {
@@ -104,7 +113,12 @@ class Ctap2Authenticator(
                     getAssertion(p, keepAlive, channel)
                 }
                 CtapCommand.GET_NEXT_ASSERTION -> getNextAssertion(keepAlive, channel)
-                CtapCommand.CLIENT_PIN -> clientPin.process(params ?: throw CtapException(CtapStatus.ERR_MISSING_PARAMETER))
+                CtapCommand.CLIENT_PIN -> clientPin.process(
+                    params ?: throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
+                ) { authorizeOrThrow(it, keepAlive) }
+                CtapCommand.CREDENTIAL_MANAGEMENT -> credentialManagement.process(
+                    params ?: throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
+                ) { authorizeOrThrow(it, keepAlive) }
                 CtapCommand.RESET -> reset(keepAlive)
                 CtapCommand.SELECTION -> selection(keepAlive)
                 else -> throw CtapException(CtapStatus.ERR_INVALID_COMMAND)
@@ -125,6 +139,7 @@ class Ctap2Authenticator(
     /** トランスポートの切断時などに呼び、セッション状態を破棄する。ブロックしない。 */
     fun resetSession() {
         pending = null
+        sessionEpoch++
     }
 
     private fun emit(command: Int, status: Int, rpId: String?, userName: String?, detail: String?) {
@@ -138,14 +153,18 @@ class Ctap2Authenticator(
     private fun getInfo(): Map<Long, Any> {
         val config = configProvider()
         return linkedMapOf(
-            0x01L to listOf("FIDO_2_0"),
-            0x02L to listOf(HmacSecret.ID),
+            0x01L to listOf("FIDO_2_0", "FIDO_2_1"),
+            0x02L to listOf(CredProtect.ID, HmacSecret.ID),
             0x03L to config.aaguid,
             0x04L to linkedMapOf(
                 "rk" to true,
                 "up" to true,
                 "uv" to true,
-                "plat" to false
+                "plat" to false,
+                "pinUvAuthToken" to true,
+                "credMgmt" to true,
+                // 本アプリはすべての登録で内蔵 UV (受付ゲート) を経るため、UV の指定を必須にしない
+                "makeCredUvNotRqd" to true
             ),
             0x05L to config.maxMessageSize.toLong(),
             0x06L to clientPin.supportedProtocols.map { it.toLong() },
@@ -180,27 +199,36 @@ class Ctap2Authenticator(
 
         val excludeIds = credentialIds(p.optList(5))
         // extensions: map であることを検証し、未知の拡張は無視する
-        val hmacSecret = HmacSecret.requested(p.optMap(6))
+        val extensions = p.optMap(6)
+        val hmacSecret = HmacSecret.requested(extensions)
+        val credProtect = CredProtect.requested(extensions)
         val options = p.optMap(7)
         val rk = options.option("rk") ?: false
         val uv = options.option("uv") ?: false
         val upOption = options.option("up")
-        val pinAuth = p.optBytes(8)
-        p.optInt(9) // pinProtocol: 型のみ検証
+        val pinUvAuthParam = p.optBytes(8)
+        val pinUvAuthProtocol = p.optInt(9)
 
         val request = AuthorizationRequest(CtapOperation.MAKE_CREDENTIAL, rpId, user.name, true, uv)
 
         // CTAP 2.0 §5.1 の手順 1: excludeList の該当確認はアルゴリズムの判定より前。
-        if (excludeIds.isNotEmpty() && store.findByIds(rpId, excludeIds).isNotEmpty()) {
+        val excluded = if (excludeIds.isEmpty()) emptyList() else store.findByIds(rpId, excludeIds)
+        if (excluded.isNotEmpty()) {
             // 仕様上はユーザー存在確認を経てから返す。
-            authorizeOrThrow(request, keepAlive).lease.complete(consumed = false)
-            throw CtapException(CtapStatus.ERR_CREDENTIAL_EXCLUDED)
+            val g = authorizeOrThrow(request, keepAlive)
+            g.lease.complete(consumed = false)
+            // credProtect レベル 3 の credential は UV 済みの場合のみ一致として扱う (CTAP 2.1 §6.1.2 手順 12)
+            if (excluded.any { it.credProtect != CredProtect.USER_VERIFICATION_REQUIRED || g.userVerified }) {
+                throw CtapException(CtapStatus.ERR_CREDENTIAL_EXCLUDED)
+            }
         }
         if (!es256) throw CtapException(CtapStatus.ERR_UNSUPPORTED_ALGORITHM)
         // up:false は登録では無効 (CTAP 2.1 §6.1.2)。up:true は互換性のため受け付ける。
         if (upOption == false) throw CtapException(CtapStatus.ERR_INVALID_OPTION)
 
-        checkPinAuth(pinAuth, request, keepAlive)
+        val tokenUsed = verifyPinUvAuthParam(
+            pinUvAuthParam, pinUvAuthProtocol, clientDataHash, ClientPin.PERMISSION_MC, rpId, request, keepAlive
+        )
 
         val grant = authorizeOrThrow(request, keepAlive)
         var success = false
@@ -209,13 +237,20 @@ class Ctap2Authenticator(
             ensureActive(grant.lease, keepAlive)
             // 上書き登録 (同一 RP・同一 user.id の discoverable) でも、旧 credential は新しい登録が
             // 完成してから削除する (新規作成の失敗で既存の鍵を失わない)。
-            val credential = store.create(rpId, rpName, user, rk, CredentialOptions(hmacSecret = hmacSecret))
-                .also { created = it }
+            val credential = store.create(
+                rpId, rpName, user, rk,
+                CredentialOptions(hmacSecret = hmacSecret, credProtect = credProtect ?: CredProtect.USER_VERIFICATION_OPTIONAL)
+            ).also { created = it }
             // 拡張の出力は要求された拡張のみ (CTAP 2.1 §6.1.2 手順 15)
-            val extensions = if (hmacSecret) linkedMapOf<String, Any>(HmacSecret.ID to credential.hmacSecret) else null
-            val flags = AuthDataFlags.UP or AuthDataFlags.AT or (if (grant.userVerified) AuthDataFlags.UV else 0) or
-                (if (extensions != null) AuthDataFlags.ED else 0)
-            val authData = buildAuthData(rpIdHash(rpId), flags, credential.signCount, extensions) {
+            val outputs = linkedMapOf<String, Any>()
+            if (credProtect != null) outputs[CredProtect.ID] = credential.credProtect.toLong()
+            if (hmacSecret) outputs[HmacSecret.ID] = credential.hmacSecret
+            val extensionOutputs = outputs.ifEmpty { null }
+            // pinUvAuthParam の検証に成功した場合も UV 済み (CTAP 2.1 §6.1.2 手順 11.1.7)
+            val userVerified = grant.userVerified || tokenUsed
+            val flags = AuthDataFlags.UP or AuthDataFlags.AT or (if (userVerified) AuthDataFlags.UV else 0) or
+                (if (extensionOutputs != null) AuthDataFlags.ED else 0)
+            val authData = buildAuthData(rpIdHash(rpId), flags, credential.signCount, extensionOutputs) {
                 it.write(config.aaguid)
                 it.write((credential.id.size ushr 8) and 0xFF)
                 it.write(credential.id.size and 0xFF)
@@ -233,6 +268,7 @@ class Ctap2Authenticator(
             // 応答を返す直前にも確認する (停止後に登録結果を送出しない)。
             ensureActive(grant.lease, keepAlive)
             if (rk) replaceOlderDiscoverable(credential)
+            if (tokenUsed) clientPin.onUserPresentOperation()
             success = true
             return linkedMapOf(1L to fmt, 2L to authData, 3L to attStmt)
         } finally {
@@ -257,35 +293,41 @@ class Ctap2Authenticator(
         if (options.option("rk") != null) throw CtapException(CtapStatus.ERR_INVALID_OPTION)
         val up = options.option("up") ?: true
         val uv = options.option("uv") ?: false
-        val pinAuth = p.optBytes(6)
-        p.optInt(7) // pinProtocol: 型のみ検証
+        val pinUvAuthParam = p.optBytes(6)
+        val pinUvAuthProtocol = p.optInt(7)
         // hmac-secret は UP を伴う認証でのみ使える (CTAP 2.1 §12.5)。入力の検証・salt の復号は認可の前に行う。
         if (HmacSecret.present(extensions) && !up) throw CtapException(CtapStatus.ERR_UNSUPPORTED_OPTION)
         val hmacSecret = HmacSecret.parse(extensions, clientPin)
 
         val request = AuthorizationRequest(CtapOperation.GET_ASSERTION, rpId, null, up, uv)
-        checkPinAuth(pinAuth, request, keepAlive)
+        val tokenUsed = verifyPinUvAuthParam(
+            pinUvAuthParam, pinUvAuthProtocol, clientDataHash, ClientPin.PERMISSION_GA, rpId, request, keepAlive
+        )
+        // pinUvAuthParam と uv オプションは排他で、pinUvAuthParam を優先する (CTAP 2.1 §6.2)
+        val uvRequested = uv && !tokenUsed
 
         // credential の有無は、認可 (受付状態の確認) を経てから返す (認可前の存在確認を防ぐ)。
         val grant = authorizeOrThrow(request, keepAlive)
         var success = false
         var userInteraction = false
         try {
-            val credentials = when {
+            // UP と UV は独立に扱う (up:false, uv:true も有効な組み合わせ)。
+            val userPresent = up && grant.userPresent
+            if (uvRequested && !grant.userVerified) {
+                throw CtapException(CtapStatus.ERR_OPERATION_DENIED, "user verification was not performed")
+            }
+            // silent assertion (up:false, uv:false) では UV を立てない。pinUvAuthParam の検証に成功した場合は UV 済み。
+            val userVerified = tokenUsed || (grant.userVerified && (userPresent || uvRequested))
+            // ワンタイムの消費は UP・UV のユーザー操作を伴う場合のみ (トークンだけの silent assertion は消費しない)
+            userInteraction = userPresent || (uvRequested && grant.userVerified)
+
+            val located = when {
                 !restrictToAllowList -> store.findDiscoverable(rpId)
                 allowIds.isEmpty() -> emptyList()
                 else -> store.findByIds(rpId, allowIds)
             }
+            val credentials = CredProtect.filter(located, userVerified, restrictToAllowList)
             if (credentials.isEmpty()) throw CtapException(CtapStatus.ERR_NO_CREDENTIALS)
-
-            // UP と UV は独立に扱う (up:false, uv:true も有効な組み合わせ)。
-            val userPresent = up && grant.userPresent
-            if (uv && !grant.userVerified) {
-                throw CtapException(CtapStatus.ERR_OPERATION_DENIED, "user verification was not performed")
-            }
-            // silent assertion (up:false, uv:false) では UV を立てない。
-            val userVerified = grant.userVerified && (userPresent || uv)
-            userInteraction = userPresent || userVerified
             val flags = (if (userPresent) AuthDataFlags.UP else 0) or (if (userVerified) AuthDataFlags.UV else 0)
             val rpIdHash = rpIdHash(rpId)
 
@@ -301,6 +343,7 @@ class Ctap2Authenticator(
                     lease = grant.lease, origin = keepAlive, channel = channel, hmacSecret = hmacSecret
                 )
             }
+            if (tokenUsed && userPresent) clientPin.onUserPresentOperation()
             success = true
             return response
         } finally {
@@ -385,7 +428,7 @@ class Ctap2Authenticator(
         try {
             ensureActive(grant.lease, keepAlive)
             store.deleteAll()
-            clientPin.regenerate()
+            clientPin.reset()
             success = true
         } finally {
             grant.lease.complete(consumed = success)
@@ -427,16 +470,28 @@ class Ctap2Authenticator(
     }
 
     /**
-     * clientPIN 非対応の認証器としての pinAuth / pinUvAuthParam の扱い。
-     * 長さ 0 の pinAuth はプラットフォームによる「タッチ待ち」プローブであり、存在確認後に PIN_NOT_SET を返す。
+     * pinUvAuthParam (CTAP 2.0 の pinAuth) を確認し、pinUvAuthToken で検証できた場合は true を返す。
+     *
+     * - なし: false (pinUvAuthToken を使わない要求)
+     * - 長さ 0: プラットフォームによる「タッチ待ち」プローブ。存在確認後に `0x35 PIN_NOT_SET` (PIN 非対応のため)
+     * - それ以外: [ClientPin.verifyForOperation] で検証する (失敗は `0x33`、プロトコルの省略は `0x14`、未対応は `0x02`)
      */
-    private fun checkPinAuth(pinAuth: ByteArray?, request: AuthorizationRequest, keepAlive: KeepAlive) {
-        if (pinAuth == null) return
-        if (pinAuth.isEmpty()) {
+    private fun verifyPinUvAuthParam(
+        param: ByteArray?,
+        version: Long?,
+        clientDataHash: ByteArray,
+        permission: Int,
+        rpId: String,
+        request: AuthorizationRequest,
+        keepAlive: KeepAlive
+    ): Boolean {
+        if (param == null) return false
+        if (param.isEmpty()) {
             authorizeOrThrow(request.copy(requireUserVerification = false), keepAlive).lease.complete(consumed = false)
             throw CtapException(CtapStatus.ERR_PIN_NOT_SET)
         }
-        throw CtapException(CtapStatus.ERR_PIN_AUTH_INVALID)
+        clientPin.verifyForOperation(version, clientDataHash, param, permission, rpId)
+        return true
     }
 
     /** 鍵の使用不可 (Keystore の認証期限切れ等) を `0x27` に変換する。 */

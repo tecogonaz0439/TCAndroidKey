@@ -66,18 +66,21 @@ class Ctap2AuthenticatorTest {
     }
 
     @Test
-    fun getInfoAdvertisesFido20WithBuiltInUv() {
+    fun getInfoAdvertisesFido20And21WithBuiltInUv() {
         val (status, info) = call(CtapCommand.GET_INFO)
         assertEquals(CtapStatus.OK, status)
-        assertEquals(listOf("FIDO_2_0"), info!![1L])
+        assertEquals(listOf("FIDO_2_0", "FIDO_2_1"), info!![1L])
         assertArrayEquals(aaguid, info[3L] as ByteArray)
         val options = info[4L] as Map<*, *>
         assertEquals(true, options["rk"])
         assertEquals(true, options["uv"])
         assertEquals(false, options["plat"])
         assertFalse(options.containsKey("clientPin"))
-        assertEquals(listOf("hmac-secret"), info[2L])
-        assertEquals(listOf(1L), info[6L])
+        assertEquals(true, options["pinUvAuthToken"])
+        assertEquals(true, options["credMgmt"])
+        assertEquals(true, options["makeCredUvNotRqd"])
+        assertEquals(listOf("credProtect", "hmac-secret"), info[2L])
+        assertEquals(listOf(2L, 1L), info[6L])
     }
 
     @Test

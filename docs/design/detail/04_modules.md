@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-04 |
-| 版数 | 1.3 |
+| 版数 | 1.4 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.4 (2026-11-05): `CredentialManagement`・`CredProtect`、`ClientPin` の pinUvAuthToken、`CredentialStore.updateUser`、`CtapOperation` の追加 |
 | 改訂 | 1.3 (2026-11-05): `ClientPin`・`HmacSecret`・`CredentialOptions`、`CredentialStore.credRandom` を追加 |
 | 改訂 | 1.2 (2026-11-05): `fido.pin` パッケージ (PIN/UV Auth Protocol) を追加 |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応 (`AuthorizationGate`・`AuthorizationLease` の追加、`TransportPolicy`・`onOperationCompleted`・`deleteDiscoverable` の廃止ほか)。`review/FIX_PLAN.md` |
@@ -29,6 +30,7 @@ classDiagram
         +credRandom(credential, userVerified) ByteArray?
         +incrementSignCount(credential) Long
         +list() List
+        +updateUser(id, user) Boolean
         +delete(id) Boolean
         +deleteAll()
     }
@@ -110,14 +112,16 @@ classDiagram
 | クラス | 責務 |
 |---|---|
 | `Ctap2Authenticator` | CTAP2 コマンド処理 (DD-01)。1 トランスポートに 1 インスタンス (GetNextAssertion 状態を保持)。`process` は `@Synchronized`、`resetSession` はブロックしない (`@Volatile`)。時計は wall clock (イベント) と単調時計 (GetNextAssertion) を注入できる |
-| `CredentialStore` | 鍵保管の抽象 (スレッドセーフであること)。`create(…, options)`、`credRandom(credential, userVerified)` (hmac-secret。CredRandom がなければ null) |
-| `CredentialOptions` | 登録時の属性 (`hmacSecret`) |
-| `ClientPin` | authenticatorClientPIN (0x06。getKeyAgreement のみ) と、プロトコル番号ごとの `PinUvAuthProtocol` (鍵交換の鍵) の保持。`protocol(version)`、`sharedSecret(protocol, keyAgreement)`、`regenerate()` (Reset 時) |
+| `CredentialStore` | 鍵保管の抽象 (スレッドセーフであること)。`create(…, options)`、`credRandom(credential, userVerified)` (hmac-secret。CredRandom がなければ null)、`updateUser(id, user)` (credentialManagement) |
+| `CredentialOptions` | 登録時の属性 (`hmacSecret`、`credProtect`) |
+| `ClientPin` | authenticatorClientPIN (0x06。getKeyAgreement、getPinUvAuthTokenUsingUvWithPermissions)、プロトコルごとの `PinUvAuthProtocol` と pinUvAuthToken の状態 (DD-01 §12.1)。`verifyForOperation` (MC / GA)、`verifyForCredentialManagement`、`onUserPresentOperation` (使用後の権限の消去)、`isTokenInUse`、`reset()` (Reset 時)。時計とセッションの世代を注入する |
+| `CredentialManagement` | authenticatorCredentialManagement (0x0A。DD-01 §12.4)。列挙の途中状態を持ち、他のコマンドで破棄する |
+| `CredProtect` | credProtect 拡張 (DD-01 §12.3)。登録の要求の解釈と、認証での絞り込み |
 | `HmacSecret` / `HmacSecretInput` | hmac-secret 拡張 (DD-01 §11.2)。登録の要求の判定、認証の入力の検証と salt の復号、出力の暗号化 |
-| `StoredCredential` | クレデンシャルのメタデータ (DD-06 §2。`hmacSecret` を含む)。秘密鍵は含まない。等価性は全フィールドの内容 (StateFlow の更新を抑止しないため)。同一性は `isSameCredential`。並び順 `NEWEST_FIRST` (作成日時の新しい順、同時刻は ID 順) |
+| `StoredCredential` | クレデンシャルのメタデータ (DD-06 §2。`hmacSecret`・`credProtect` を含む)。秘密鍵は含まない。等価性は全フィールドの内容 (StateFlow の更新を抑止しないため)。同一性は `isSameCredential`。並び順 `NEWEST_FIRST` (作成日時の新しい順、同時刻は ID 順) |
 | `UserEntity` | `id` / `name` / `displayName` |
 | `KeySecurityLevel` | `STRONGBOX` / `TEE` / `SOFTWARE` / `UNKNOWN` |
-| `AuthorizationPolicy` / `AuthorizationRequest` / `AuthorizationResult` | 認可の抽象 (DD-01 §1.4) |
+| `AuthorizationPolicy` / `AuthorizationRequest` / `AuthorizationResult` / `CtapOperation` | 認可の抽象 (DD-01 §1.4)。操作種別に `PIN_UV_AUTH_TOKEN`・`CREDENTIAL_MANAGEMENT` (ワンタイムを消費しない) を含む |
 | `AuthorizationLease` | 許可した操作の有効性 (`isValid`) と終了 (`complete(consumed)`)。`UNBOUND` は管理しないポリシー用 (DD-05 §2.4) |
 | `KeepAlive` | 要求ごとの keepalive 送信 (`STATUS_PROCESSING` = 1、`STATUS_UP_NEEDED` = 2) と取消トークン (`isCancelled`) |
 | `AuthenticatorConfig` | AAGUID、アテステーション方式、transports、リセット許可、maxMsgSize。`configProvider` で要求毎に取得 (設定変更を即時反映) |

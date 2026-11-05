@@ -3,11 +3,12 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-05 |
-| 版数 | 1.1 |
+| 版数 | 1.2 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.2 (2026-11-05): §2.5 pinUvAuthToken と受付ゲートの関係を追加 |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応。認可を全トランスポート共有の `AuthorizationGate` に集約し、Lease・取消トークン・接続世代を導入 (`review/FIX_PLAN.md`) |
 | 実装 | `fido-core/.../session/AuthorizationGate.kt`, `app/.../auth/AuthSessionManager.kt`, `MainActivity.kt`, `bluetooth/BluetoothHidAuthenticator.kt`, `fido-core/.../nfc/NfcCtapProcessor.kt`, `app/.../nfc/FidoHostApduService.kt` |
-| 関連要件 | FR-11〜FR-15, SEC-02, SEC-04 |
+| 関連要件 | FR-11〜FR-15, FR-22, SEC-02, SEC-04 |
 
 ## 1. 時刻の基準
 
@@ -112,6 +113,41 @@ sequenceDiagram
     A->>G: lease.complete(consumed)
     A-->>T: 応答
     Note over G: disarm / setForeground(false) → epoch+1<br/>以降 lease.isValid() = false
+```
+
+### 2.5 pinUvAuthToken と受付ゲート
+
+CTAP 2.1 の pinUvAuthToken (DD-01 §12.1) は、受付ゲートの認可を置き換えない。トークンの発行・トークンを使う操作のどちらでも
+`AuthorizationGate.authorize` を呼ぶ。
+
+| 操作 | 認可 | ワンタイム |
+|---|---|---|
+| トークンの発行 (ClientPIN 0x06) | `PIN_UV_AUTH_TOKEN` (UV 要)。受付外なら NFC は拒否、Bluetooth は本人確認を待つ | 消費しない (`complete(false)`) |
+| トークンを使う登録・UP を伴う認証 | `MAKE_CREDENTIAL` / `GET_ASSERTION` | 消費する |
+| トークンを使う silent assertion | `GET_ASSERTION` (UP なし) | 消費しない |
+| 資格情報の管理 (CredentialManagement 0x0A) | `CREDENTIAL_MANAGEMENT`。列挙の続きは開始時の Lease で継続 | 消費しない |
+
+トークンは発行時の Lease を保持し、`Lease.isValid()` が false になる (停止・前面離脱) と使えなくなる。
+NFC の切断などで `Ctap2Authenticator.resetSession` が呼ばれた場合も使えなくなる (セッションの世代)。
+
+```mermaid
+sequenceDiagram
+    participant C as クライアント (CTAP 2.1)
+    participant A as Ctap2Authenticator
+    participant G as AuthorizationGate
+    C->>A: ClientPIN getKeyAgreement
+    C->>A: ClientPIN getPinUvAuthTokenUsingUvWithPermissions (mc)
+    A->>G: authorize(PIN_UV_AUTH_TOKEN)
+    G-->>A: Granted(lease)
+    A->>G: lease.complete(consumed = false)
+    A-->>C: encrypt(pinUvAuthToken)
+    C->>A: MakeCredential + pinUvAuthParam
+    A->>A: トークンの検証 (使用中・HMAC・権限・RP ID)
+    A->>G: authorize(MAKE_CREDENTIAL)
+    G-->>A: Granted(lease)
+    A->>A: 鍵生成・応答の作成、トークンの権限を消去
+    A->>G: lease.complete(consumed = true)
+    A-->>C: 登録結果
 ```
 
 ## 3. 本人確認ダイアログ

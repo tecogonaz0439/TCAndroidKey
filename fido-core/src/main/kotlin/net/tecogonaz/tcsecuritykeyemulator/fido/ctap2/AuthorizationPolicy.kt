@@ -3,8 +3,13 @@
 
 package net.tecogonaz.tcsecuritykeyemulator.fido.ctap2
 
-/** ユーザー操作を伴う CTAP 操作の種類。 */
-enum class CtapOperation { MAKE_CREDENTIAL, GET_ASSERTION, RESET, SELECTION }
+/**
+ * ユーザー操作を伴う CTAP 操作の種類。
+ *
+ * - [PIN_UV_AUTH_TOKEN]: 内蔵 UV による pinUvAuthToken の発行 (ClientPIN 0x06)。ワンタイムは消費しない
+ * - [CREDENTIAL_MANAGEMENT]: authenticatorCredentialManagement の各操作。ワンタイムは消費しない
+ */
+enum class CtapOperation { MAKE_CREDENTIAL, GET_ASSERTION, RESET, SELECTION, PIN_UV_AUTH_TOKEN, CREDENTIAL_MANAGEMENT }
 
 /**
  * 認証器が操作の実行可否を問い合わせるための要求。

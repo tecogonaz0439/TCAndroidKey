@@ -2,7 +2,7 @@
 
 # セキュリティキーエミュレータ
 
-**セキュリティキーエミュレータ** (Security Key Emulator、プロジェクト名: TCSecurityKeyEmulator) は、Android 端末を **FIDO2 (CTAP 2.0) セキュリティキー** として動作させ、**FIDO / FIDO2 (WebAuthn) を使用する Web アプリケーションを試験する**ための Android アプリです。PC に接続した NFC リーダー (または別の Android 端末) に端末をかざして、開発中の Web アプリケーションのパスキー・セキュリティキーの登録とサインインを試せます。
+**セキュリティキーエミュレータ** (Security Key Emulator、プロジェクト名: TCSecurityKeyEmulator) は、Android 端末を **FIDO2 (CTAP 2.0 / 2.1) セキュリティキー** として動作させ、**FIDO / FIDO2 (WebAuthn) を使用する Web アプリケーションを試験する**ための Android アプリです。PC に接続した NFC リーダー (または別の Android 端末) に端末をかざして、開発中の Web アプリケーションのパスキー・セキュリティキーの登録とサインインを試せます。
 
 > [!IMPORTANT]
 > **本アプリはテスト用ツールです。YubiKey などの物理セキュリティキーの代替として使用しないでください。**
@@ -14,8 +14,9 @@
 
 ## 機能
 
-- **NFC による FIDO2 セキュリティキー** — ホストカードエミュレーション (HCE) で FIDO アプレットとして動作。CTAP 2.0 の MakeCredential、GetAssertion、GetNextAssertion、GetInfo、Selection、Reset (任意) に対応
+- **NFC による FIDO2 セキュリティキー** — ホストカードエミュレーション (HCE) で FIDO アプレットとして動作。CTAP 2.0 / 2.1 の MakeCredential、GetAssertion、GetNextAssertion、GetInfo、ClientPIN (鍵交換と内蔵 UV によるトークンの発行)、CredentialManagement、Selection、Reset (任意) に対応
 - **パスキーと非検出クレデンシャル** — ES256 (ECDSA P-256)、1 サイトに複数アカウント、アテステーションは `none` または packed の自己アテステーション
+- **内蔵 UV による CTAP 2.1** — クライアントは端末での本人確認で pinUvAuthToken を得る (PIN は不要)。credProtect の保護レベルと、クライアントからの資格情報の管理 (列挙・名前の変更・削除) に対応
 - **hmac-secret 拡張** — WebAuthn の PRF 拡張の基盤となる CTAP の拡張。credential ごとの秘密値は Android Keystore の HMAC 鍵から導出
 - **Android Keystore 内の鍵** — 登録ごとに StrongBox (または TEE) 内で秘密鍵を生成し、端末外へ出さない。個別削除・全削除に対応
 - **許可したときだけ認証** — アプリの画面が表示されている間、指紋 (または画面ロック) による本人確認の直後の短い時間だけ、既定では本人確認 1 回につき 1 回だけ応答
@@ -62,7 +63,7 @@ Windows・macOS・Android での手順ごとの確認方法 ([python-fido2](http
 | macOS (Chrome) | NFC | ブラウザが非対応 |
 | Windows / macOS のブラウザ | Bluetooth HID | 実験的 |
 
-既知の制約 (clientPIN 非対応、CTAP 2.0 のみ、U2F 非対応、hmac-secret 以外の拡張機能非対応など) は [設計書](docs/design/appendix/C_roadmap.md) に記載しています。
+既知の制約 (clientPIN 非対応、CTAP 2.1 は一部のみ、U2F 非対応、largeBlob 非対応など) は [設計書](docs/design/appendix/C_roadmap.md) に記載しています。
 
 ## ドキュメント
 

@@ -11,9 +11,11 @@
 | CBOR | Concise Binary Object Representation (RFC 8949)。CTAP2 のメッセージ形式 |
 | Class 3 生体認証 (BIOMETRIC_STRONG) | Android の生体認証の強度区分のうち最も強いもの。Keystore 鍵の認証に使える |
 | clientDataHash | クライアントデータ (チャレンジ・オリジン等) の SHA-256。署名対象に含まれる |
-| clientPIN | CTAP の PIN によるユーザー検証機能。本アプリは非対応 |
+| clientPIN | CTAP の PIN によるユーザー検証機能。本アプリは非対応 (authenticatorClientPIN コマンドのうち鍵交換と内蔵 UV によるトークンの発行のみ対応) |
+| credProtect | credential の保護レベル (1〜3) を指定する CTAP 2.1 の拡張。レベル 2・3 は UV なしの認証で使えない |
+| credentialManagement | クライアントから認証器の discoverable credential を列挙・削除・更新する CTAP 2.1 のコマンド |
 | COSE_Key | CBOR Object Signing and Encryption (RFC 9052/9053) 形式の公開鍵 |
-| CTAP | Client to Authenticator Protocol。クライアント (OS / ブラウザ) と認証器の通信規約。本アプリは CTAP 2.0 |
+| CTAP | Client to Authenticator Protocol。クライアント (OS / ブラウザ) と認証器の通信規約。本アプリは CTAP 2.0 / 2.1 |
 | CTAPHID | USB / HID 上の CTAP フレーミング。本アプリは Bluetooth HID で使用 |
 | credential ID | クレデンシャルの識別子。本アプリは 32 バイトの乱数 |
 | discoverable credential (パスキー) | 認証器にユーザー情報も保存され、ユーザー名なしで認証できるクレデンシャル (旧称 resident key, rk) |
@@ -33,3 +35,6 @@
 | 受付状態 / 受付時間 | 本アプリ独自の概念。本人確認後に認証を受け付ける状態とその時間 |
 | ワンタイム | 本アプリ独自の設定。1 回の本人確認で 1 回の登録/認証のみ許可する |
 | WebAuthn | Web Authentication API (W3C)。ブラウザから公開鍵認証を使うための API |
+| hmac-secret / PRF | credential ごとの秘密値で salt の HMAC を返す CTAP の拡張。WebAuthn の PRF 拡張はこれで実現される |
+| PIN/UV Auth Protocol | クライアントと認証器の間で共有鍵を作り、PIN・トークン・salt を暗号化・認証する方式 (Protocol 1 / 2) |
+| pinUvAuthToken | PIN または内蔵 UV で得る一時的な鍵。クライアントは要求の HMAC (pinUvAuthParam) を付けて UV 済みであることを示す |

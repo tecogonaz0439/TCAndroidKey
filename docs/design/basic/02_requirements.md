@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-BD-02 |
-| 版数 | 1.3 |
+| 版数 | 1.4 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.4 (2026-11-05): FR-22 (CTAP 2.1 と pinUvAuthToken)、FR-23 (credProtect)、FR-24 (credentialManagement) を追加。FR-01 を CTAP 2.0 / 2.1 に更新 |
 | 改訂 | 1.3 (2026-11-05): FR-21 (hmac-secret 拡張) を追加 |
 | 改訂 | 1.2 (2026-11-02): FR-19 (言語設定)、FR-20 (注意書きの表示) を追加 |
 | 関連文書 | BD-01 システム概要、DD-10 テスト仕様 |
@@ -25,7 +26,7 @@
 
 | ID | 要件 | 状態 | 設計 |
 |---|---|---|---|
-| FR-01 | NFC 接続で FIDO2 認証器 (CTAP 2.0 over NFC) として動作する。主ターゲットとする | 済 | BD-04, DD-02 |
+| FR-01 | NFC 接続で FIDO2 認証器 (CTAP 2.0 / 2.1 over NFC) として動作する。主ターゲットとする | 済 | BD-04, DD-02 |
 | FR-02 | Bluetooth 接続で FIDO2 認証器として動作する (技術的に可能な範囲) | 実験 | BD-04, DD-03 |
 | FR-03 | USB 接続で FIDO2 認証器として動作する (技術的に可能な範囲) | 否 | BD-04 §4 |
 | FR-04 | クレデンシャルを登録する (authenticatorMakeCredential、ES256、discoverable / non-discoverable) | 済 | DD-01 §3 |
@@ -46,6 +47,9 @@
 | FR-19 | 設定画面から表示言語 (システムのデフォルト / 日本語 / English) を変更できる (TCSameuraDamMonitor と同様に OS のアプリ別言語設定を使う) | 済 | DD-08 §5 |
 | FR-20 | 本アプリがテスト専用であり、YubiKey などの物理セキュリティキーの代替として使用しないことを画面に明示する (初回起動時の確認 DL-03、利用規約・セキュリティポリシー SC-06) | 済 | DD-08 §8, §9 |
 | FR-21 | hmac-secret 拡張 (WebAuthn の PRF 拡張の基盤) に対応する。CredRandom は Keystore の HMAC 鍵で保護し、端末外へ取り出さない | 済 | DD-01 §11, DD-07 §6 |
+| FR-22 | CTAP 2.1 (`FIDO_2_1`) に対応する。CTAP 2.0 のクライアントとも共存し、内蔵 UV (本人確認) で pinUvAuthToken を発行する (PIN は使わない)。トークンがあっても受付ゲートの条件 (FR-11〜FR-14) を緩めない | 済 | DD-01 §12.1, §12.2, §12.5 |
+| FR-23 | credProtect 拡張 (保護レベル 1〜3) に対応する | 済 | DD-01 §12.3 |
+| FR-24 | クライアントからの資格情報の管理 (authenticatorCredentialManagement: 件数・列挙・削除・ユーザー情報の更新) に対応する | 済 | DD-01 §12.4 |
 
 ## 3. 非機能要件 (NFR)
 

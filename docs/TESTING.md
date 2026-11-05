@@ -48,7 +48,7 @@
    py scripts\test\fido2_nfc_test.py --info
    ```
 
-   アプリで本人確認 → 端末をリーダーに載せる → `versions: ['FIDO_2_0']` と AAGUID が表示されれば NFC 通信は正常。
+   アプリで本人確認 → 端末をリーダーに載せる → `versions: ['FIDO_2_0', 'FIDO_2_1']` と AAGUID が表示されれば NFC 通信は正常。
    続けて `py scripts\test\fido2_nfc_test.py` で登録・認証・署名検証まで確認する。
 3. **ブラウザでの確認**: Edge / Chrome で https://webauthn.io を開く。
    - Register: 「Advanced settings」で Authenticator Attachment = Cross-Platform、Discoverable Credential = Required (パスキー) または Discouraged、User Verification = Preferred
@@ -120,6 +120,8 @@
 | 18 | 設定 →「言語」で English / 日本語 / システムのデフォルトに切り替える | 表示が切り替わる (DD-10 IT-33) |
 | 19 | アプリのデータを消去して起動 | 注意書きダイアログが表示され、「理解しました」まで閉じない。「このアプリについて」に注意書きがある (DD-10 IT-34) |
 | 20 | `python3 scripts/test/fido2_nfc_test.py --hmac-secret` (PC/SC リーダー) | 登録で hmac-secret が有効になり、クレデンシャル画面に「hmac-secret (PRF)」。2 回の認証で同じ出力 (DD-10 CT-06) |
+| 21 | `python3 scripts/test/fido2_nfc_test.py --client` (PC/SC リーダー。操作ごとに本人確認) | python-fido2 の `Fido2Client` で UV 必須・PRF・credProtect 3 の登録、PRF 付きの認証 3 回、資格情報の管理 (列挙・名前の変更・削除) が成功する (DD-10 CT-08) |
+| 22 | Chrome の「セキュリティ キーの管理」(`chrome://settings/securityKeys`) の「ログイン データ」で、データの表示・削除 | パスキーが列挙され、削除できる (クライアントが内蔵 UV のトークンに対応する場合。結果を互換性マトリクスに記録) |
 
 ## 7. 実機なしでの応答形式の確認 (python-fido2)
 
@@ -146,3 +148,20 @@ python3 -m pip download "fido2==2.0.0" --python-version 3.12 --platform manylinu
 ```bash
 container run --rm -v /tmp:/work -v "$PWD/scripts:/scripts:ro" docker.io/library/python:3.12-slim sh -c "pip install -q --no-index --find-links /work/tcske-wheels fido2==2.0.0 && python /scripts/test/verify_interop_vectors.py /work/tcske-vectors.json"
 ```
+
+### 7.1 高水準のクライアント (Fido2Client) による確認
+
+fido-core の認証器を TCP で公開し、python-fido2 の `Fido2Client`・`ClientPin`・`CredentialManagement` で操作する (DD-10 CT-07)。
+先にサーバ (JUnit) を起動して接続を待たせ、別の端末でクライアントを実行する。
+
+```bash
+TCSKE_INTEROP_PORT=47777 ./gradlew :fido-core:test --tests '*InteropServer*' --rerun -i
+```
+
+```bash
+python3 scripts/test/interop_client_e2e.py 127.0.0.1 47777
+```
+
+コンテナで実行する場合は、ホストのアドレス (Apple `container` では既定で `192.168.64.1`) を指定する。
+クライアントの出力の最後が `OK`、サーバのログに `one-time consumptions` が UP を伴う登録・認証の回数と一致して表示されれば成功。
+

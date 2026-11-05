@@ -2,7 +2,7 @@
 
 # Security Key Emulator
 
-**Security Key Emulator** (project name: TCSecurityKeyEmulator) is an Android app that turns an Android device into a **FIDO2 (CTAP 2.0) security key** for **testing web applications that use FIDO / FIDO2 (WebAuthn)**. Hold the device to an NFC reader connected to a PC (or to another Android device) to try passkey and security-key registration and sign-in on the web application you are developing.
+**Security Key Emulator** (project name: TCSecurityKeyEmulator) is an Android app that turns an Android device into a **FIDO2 (CTAP 2.0 / 2.1) security key** for **testing web applications that use FIDO / FIDO2 (WebAuthn)**. Hold the device to an NFC reader connected to a PC (or to another Android device) to try passkey and security-key registration and sign-in on the web application you are developing.
 
 > [!IMPORTANT]
 > **This app is a testing tool. Do not use it as a replacement for physical security keys such as YubiKey.**
@@ -14,8 +14,9 @@
 
 ## Features
 
-- **FIDO2 security key over NFC** — Host-based card emulation (HCE) of the FIDO applet; CTAP 2.0 commands MakeCredential, GetAssertion, GetNextAssertion, GetInfo, Selection, and Reset (optional)
+- **FIDO2 security key over NFC** — Host-based card emulation (HCE) of the FIDO applet; CTAP 2.0 / 2.1 commands MakeCredential, GetAssertion, GetNextAssertion, GetInfo, ClientPIN (key agreement and built-in UV tokens), CredentialManagement, Selection, and Reset (optional)
 - **Passkeys and non-discoverable credentials** — ES256 (ECDSA P-256), multiple accounts per site, `none` or packed self attestation
+- **CTAP 2.1 with built-in user verification** — clients get a pinUvAuthToken through on-device verification (no PIN); credProtect levels and credential management (enumerate, rename, delete) are supported
 - **hmac-secret extension** — the CTAP extension behind WebAuthn PRF; the per-credential secret is derived from an HMAC key kept in Android Keystore
 - **Keys in the Android Keystore** — A private key is generated for each registration in StrongBox (or the TEE) and never leaves the device; delete keys individually or all at once
 - **Authentication only when you allow it** — Only while the app is on screen, only within a short window after fingerprint (or screen lock) verification, and by default only once per verification
@@ -62,7 +63,7 @@ See [Testing](docs/TESTING.md) for step-by-step checks on Windows, macOS, and An
 | macOS (Chrome) | NFC | Not supported by the browser |
 | Windows / macOS browsers | Bluetooth HID | Experimental |
 
-Known limitations (no clientPIN, CTAP 2.0 only, no U2F, no extensions other than hmac-secret, and so on) are listed in the [design documents](docs/design/appendix/C_roadmap.md).
+Known limitations (no clientPIN, part of CTAP 2.1 only, no U2F, no largeBlob, and so on) are listed in the [design documents](docs/design/appendix/C_roadmap.md).
 
 ## Documentation
 

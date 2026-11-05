@@ -3,13 +3,14 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-01 |
-| 版数 | 1.3 |
+| 版数 | 1.4 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.4 (2026-11-05): CTAP 2.1 (pinUvAuthToken、credProtect、authenticatorCredentialManagement) を追加 (§1、§2、§3、§4、§6、§8、§11.1、§12) |
 | 改訂 | 1.3 (2026-11-05): hmac-secret 拡張と authenticatorClientPIN の getKeyAgreement を追加 (§2、§3、§4、§7、§8、§11) |
 | 改訂 | 1.2 (2026-11-05): PIN/UV Auth Protocol 1 / 2 の暗号処理 (§10) を追加 (コマンドからはまだ使わない) |
 | 改訂 | 1.1 (2026-11-02): 外部レビュー対応 (認可の Lease 化、入力検証・処理順序・UP/UV・allowList・GetNextAssertion・上書き登録・CBOR の厳密化)。`review/FIX_PLAN.md` |
-| 実装 | `fido-core/.../ctap2/Ctap2Authenticator.kt`, `CtapConstants.kt`, `cbor/Cbor.kt`, `ctap2/ClientPin.kt`, `ctap2/HmacSecret.kt`, `pin/PinUvAuthProtocol.kt`, `pin/CoseEcdhKey.kt`, `pin/Hkdf.kt` |
-| 関連要件 | FR-04〜FR-06, FR-10, FR-16, FR-21, SEC-10 |
+| 実装 | `fido-core/.../ctap2/Ctap2Authenticator.kt`, `CtapConstants.kt`, `cbor/Cbor.kt`, `ctap2/ClientPin.kt`, `ctap2/HmacSecret.kt`, `ctap2/CredProtect.kt`, `ctap2/CredentialManagement.kt`, `pin/PinUvAuthProtocol.kt`, `pin/CoseEcdhKey.kt`, `pin/Hkdf.kt` |
+| 関連要件 | FR-04〜FR-06, FR-10, FR-16, FR-21〜FR-24, SEC-10 |
 
 ## 1. 共通仕様
 
@@ -47,7 +48,8 @@ flowchart TD
     H --> I["イベント通知 (AuthenticatorEvent)"]
 ```
 
-- 未知のコマンド・非対応コマンド (CredentialManagement 0x0A 等) は `0x01 INVALID_COMMAND`。ClientPIN (0x06) は §11.1。
+- 未知のコマンド・非対応コマンド (CTAP 2.1 の試行版の CredentialManagement 0x41、authenticatorLargeBlobs 0x0C、authenticatorConfig 0x0D 等) は
+  `0x01 INVALID_COMMAND`。ClientPIN (0x06) は §11.1、CredentialManagement (0x0A) は §12.4。
 - 処理中の `CtapException` はそのステータス、その他の例外 (`IOException`・`KeyStoreException` 等を含むすべて) は
   `0x7F ERR_OTHER` を返し、トランスポートのスレッドへ例外を漏らさない。
 - `process(request, keepAlive, channel)` の `keepAlive` はその要求専用の取消トークン、`channel` は受信チャネル
@@ -60,10 +62,10 @@ flowchart TD
 
 | 項目 | 内容 |
 |---|---|
-| 要求内容 | 操作種別 (`MAKE_CREDENTIAL` / `GET_ASSERTION` / `RESET` / `SELECTION`)、RP ID、ユーザー名、UP 要否、UV 要否 |
+| 要求内容 | 操作種別 (`MAKE_CREDENTIAL` / `GET_ASSERTION` / `RESET` / `SELECTION` / `PIN_UV_AUTH_TOKEN` / `CREDENTIAL_MANAGEMENT`)、RP ID、ユーザー名、UP 要否、UV 要否 |
 | 結果 | `Granted(userPresent, userVerified, lease)` または `Denied(status, reason)` |
 | 有効性の確認 | 鍵の生成・署名の直前と応答の直前に `lease.isValid()` と取消トークンを確認 (`ensureActive`)。失効は `0x27`、取消は `0x2D` |
-| 完了 | 許可された操作は、すべての経路で `lease.complete(consumed)` を 1 回呼ぶ。`consumed` = 成功かつ UP または UV を伴う (ワンタイム消費) |
+| 完了 | 許可された操作は、すべての経路で `lease.complete(consumed)` を 1 回呼ぶ。`consumed` = 登録・認証の成功で、UP または `uv` オプションによる UV を伴う (ワンタイム消費)。トークンの発行 (§12.1)・資格情報の管理 (§12.4) は消費しない |
 
 Android 実装の判定内容と Lease の寿命は DD-05 §2 を参照。
 
@@ -73,16 +75,18 @@ Android 実装の判定内容と Lease の寿命は DD-05 §2 を参照。
 
 | キー | 名前 | 値 |
 |---|---|---|
-| 0x01 | versions | `["FIDO_2_0"]` |
-| 0x02 | extensions | `["hmac-secret"]` (§11.2) |
+| 0x01 | versions | `["FIDO_2_0", "FIDO_2_1"]` (§12.5) |
+| 0x02 | extensions | `["credProtect", "hmac-secret"]` (§12.3、§11.2) |
 | 0x03 | aaguid | `523283ca3c2c48b58bffa722f900e190` (16 バイト) |
-| 0x04 | options | `{"rk": true, "up": true, "uv": true, "plat": false}` |
+| 0x04 | options | `{"rk": true, "up": true, "uv": true, "plat": false, "pinUvAuthToken": true, "credMgmt": true, "makeCredUvNotRqd": true}` |
 | 0x05 | maxMsgSize | 2048 |
-| 0x06 | pinProtocols | `[1]` (§11.1。鍵交換のみに対応) |
+| 0x06 | pinUvAuthProtocols | `[2, 1]` (§10) |
 | 0x09 | transports | NFC: `["nfc"]`、Bluetooth HID: `["usb"]` (§2.1) |
 | 0x0A | algorithms | `[{"alg": -7, "type": "public-key"}]` |
 
-- `clientPin` を含めない = PIN 非対応。`pinProtocols` は hmac-secret の鍵交換 (getKeyAgreement) に使う Protocol 1 のみを示す。
+- `clientPin` を含めない = PIN 非対応。ユーザー検証は内蔵 UV (`uv: true`) で、CTAP 2.1 のクライアントは内蔵 UV で pinUvAuthToken を得る (§12.1)。
+- `makeCredUvNotRqd: true`: 本アプリはすべての登録で受付ゲートの本人確認を経るため、UV の指定を必須にしない (§12.5)。
+- 0x07 (maxCredentialCountInList)・0x08 (maxCredentialIdLength) 等の任意項目は含めない (allowList の件数・ID の長さを制限しない)。
   対応しない PIN プロトコルを広告してクライアントの制約を回避することはしない (BD-04 §5 の注記を参照)。
 
 ### 2.1 Bluetooth HID の transports を `usb` とする理由
@@ -105,10 +109,10 @@ Android 実装の判定内容と Lease の寿命は DD-05 §2 を参照。
 | 0x03 | user | map | ○ | `id` (必須・1〜64 バイト)、`name`、`displayName` |
 | 0x04 | pubKeyCredParams | array | ○ | `{"type": "public-key", "alg": -7}` が含まれること |
 | 0x05 | excludeList | array | | `type` = `public-key` の `id` を照合 |
-| 0x06 | extensions | map | | `hmac-secret` (真偽値。§11.2)。未知の拡張は無視 |
+| 0x06 | extensions | map | | `hmac-secret` (真偽値。§11.2)、`credProtect` (1〜3。§12.3)。未知の拡張は無視 |
 | 0x07 | options | map | | `rk` (既定 false)、`uv` (既定 false)、`up` (false は不可、true は互換性のため許容) |
-| 0x08 | pinAuth | bytes | | §3.3 |
-| 0x09 | pinProtocol | uint | | 整数であることのみ検証 |
+| 0x08 | pinUvAuthParam (2.0 の pinAuth) | bytes | | §3.3 |
+| 0x09 | pinUvAuthProtocol (2.0 の pinProtocol) | uint | | pinUvAuthParam がある場合に使う (§3.3) |
 
 ### 3.2 処理順序
 
@@ -117,28 +121,31 @@ Android 実装の判定内容と Lease の寿命は DD-05 §2 を参照。
 | 1 | 必須パラメータの存在・型を確認。clientDataHash が 32 バイトでない | 欠落 `0x14 MISSING_PARAMETER`、型不正 `0x11`、長さ不正 `0x03 INVALID_LENGTH` |
 | 2 | `rp.id`、`user.id` を取得。`user.id` が 0 バイトまたは 65 バイト以上 | `0x02 INVALID_PARAMETER` |
 | 3 | pubKeyCredParams・excludeList・extensions・options・pinAuth・pinProtocol の型を確認 | `0x11` / `0x14` |
-| 4 | excludeList に同一 RP の登録済み ID があれば、認可 (存在確認) 後に拒否 (CTAP 2.0 §5.1 手順 1) | `0x19 CREDENTIAL_EXCLUDED` |
+| 4 | excludeList に同一 RP の登録済み ID があれば、認可 (存在確認) 後に拒否 (CTAP 2.0 §5.1 手順 1)。credProtect レベル 3 の credential は、認可が UV 済みの場合のみ一致として扱う (CTAP 2.1 §6.1.2 手順 12) | `0x19 CREDENTIAL_EXCLUDED` |
 | 5 | pubKeyCredParams に `public-key` / ES256 がない | `0x26 UNSUPPORTED_ALGORITHM` |
 | 6 | options の `up: false` | `0x2C INVALID_OPTION` |
-| 7 | pinAuth の確認 (§3.3) | `0x35` / `0x33` |
+| 7 | pinUvAuthParam の確認 (§3.3。トークンは mc 権限) | `0x35` / `0x33` / `0x14` / `0x02` |
 | 8 | 認可 (UP 必須、UV = options.uv) | `Denied` のステータス |
 | 9 | 有効性の確認 → 鍵ペア生成・メタデータ保存 (`CredentialStore.create`)。`hmac-secret: true` なら CredRandom も作る | 失効 `0x27`、生成失敗 `0x27 OPERATION_DENIED` |
-| 10 | authenticatorData (§7) を作成。フラグ UP・AT、認可で UV 済みなら UV。`hmac-secret: true` を要求された場合は ED と拡張 `{"hmac-secret": true}` | |
+| 10 | authenticatorData (§7) を作成。フラグ UP・AT、認可で UV 済みまたは pinUvAuthParam を検証済みなら UV。要求された拡張 (`credProtect`・`hmac-secret`) の出力があれば ED と拡張 | |
 | 11 | 有効性の確認 → アテステーション作成 (§3.4) | 署名不可 `0x27` |
 | 12 | 有効性の確認 (応答の直前) | 失効 `0x27` |
 | 13 | `rk: true` なら、同一 RP・同一 `user.id` で新しい credential より前に作成された discoverable credential を削除 (上書き登録) | 削除の失敗は無視 (旧 credential が残るだけ) |
+| 13a | pinUvAuthParam を使った場合は、トークンの UV フラグと権限を消す (§12.2) | |
 | 14 | `lease.complete(consumed = 成功)`。応答を返さなかった場合は、手順 9 で作成した credential を削除する | |
 
 > 上書き登録では、旧 credential の削除を新しい登録の完成後に行う (手順 13)。鍵生成・保存・アテステーションの
 > いずれかが失敗しても、既存の credential は使えるまま残る。
 
-### 3.3 pinAuth の扱い (clientPIN 非対応)
+### 3.3 pinUvAuthParam の扱い
 
 | 入力 | 処理 |
 |---|---|
-| pinAuth なし | 通常処理 |
-| 長さ 0 の pinAuth (プラットフォームのタッチ待ちプローブ) | 認可 (UP) 後に `0x35 PIN_NOT_SET` (Lease は消費せずに完了する) |
-| 長さ 1 以上の pinAuth | `0x33 PIN_AUTH_INVALID` |
+| pinUvAuthParam なし | 通常処理 (内蔵 UV は `uv` オプションと受付ゲートで扱う) |
+| 長さ 0 (プラットフォームのタッチ待ちプローブ) | 認可 (UP) 後に `0x35 PIN_NOT_SET` (PIN 非対応のため。Lease は消費せずに完了する) |
+| 長さ 1 以上で pinUvAuthProtocol なし | `0x14 MISSING_PARAMETER` |
+| 長さ 1 以上で未対応の pinUvAuthProtocol | `0x02 INVALID_PARAMETER` |
+| 長さ 1 以上 | pinUvAuthToken で検証する (§12.2)。失敗は `0x33 PIN_AUTH_INVALID`。成功しても受付ゲートの認可は行う |
 
 GetAssertion (キー 0x06) も同様に扱う。
 
@@ -168,8 +175,8 @@ GetAssertion (キー 0x06) も同様に扱う。
 | 0x03 | allowList | array | | `type` = `public-key` の `id`。空でなければ、そのリストに限定する |
 | 0x04 | extensions | map | | `hmac-secret` (§11.2)。未知の拡張は無視 |
 | 0x05 | options | map | | `up` (既定 true)、`uv` (既定 false)、`rk` があれば `0x2C INVALID_OPTION` |
-| 0x06 | pinAuth | bytes | | §3.3 |
-| 0x07 | pinProtocol | uint | | 整数であることのみ検証 |
+| 0x06 | pinUvAuthParam | bytes | | §3.3 (トークンは ga 権限) |
+| 0x07 | pinUvAuthProtocol | uint | | pinUvAuthParam がある場合に使う |
 
 ### 4.2 処理順序
 
@@ -177,19 +184,21 @@ GetAssertion (キー 0x06) も同様に扱う。
 |---|---|---|
 | 1 | 必須パラメータ・型の確認 (clientDataHash 32 バイト)、options 解釈 | `0x14` / `0x11` / `0x03` / `0x2C` |
 | 1a | hmac-secret の入力があれば、`up: false` を拒否し、入力を検証して salt を復号する (§11.2)。認可の前に行う | `0x2B` / `0x02` / `0x33` 等 |
-| 2 | pinAuth の確認 | `0x35` / `0x33` |
+| 2 | pinUvAuthParam の確認 (§3.3)。検証できた場合、`uv` オプションは無視する (pinUvAuthParam が優先。CTAP 2.1 §6.2) | `0x35` / `0x33` / `0x14` / `0x02` |
 | 3 | 認可 (UP = options.up、UV = options.uv)。credential の有無を返す前に行う (認可前の存在確認を防ぐ) | `Denied` のステータス |
-| 4 | 対象クレデンシャルの決定: allowList が空でなければ「同一 RP かつ ID 一致」(対応 type の ID が 0 件なら 0 件)、allowList なし・空なら「同一 RP の discoverable を作成日時の新しい順」 | 0 件 `0x2E NO_CREDENTIALS` |
-| 5 | フラグ決定: UP = `options.up` かつ許可。UV = 許可で UV 済み かつ (UP または `options.uv`)。`options.uv` なのに UV 未実施なら拒否 | `0x27` |
+| 4 | フラグ決定: UP = `options.up` かつ許可。UV = pinUvAuthParam を検証済み、または (許可で UV 済み かつ (UP または `options.uv`))。`options.uv` なのに UV 未実施なら拒否 | `0x27` |
+| 5 | 対象クレデンシャルの決定: allowList が空でなければ「同一 RP かつ ID 一致」(対応 type の ID が 0 件なら 0 件)、allowList なし・空なら「同一 RP の discoverable を作成日時の新しい順」。credProtect で絞る (§12.3) | 0 件 `0x2E NO_CREDENTIALS` |
 | 6 | 有効性の確認 → 先頭のクレデンシャルで署名カウンタを +1 し、authenticatorData (37 バイト。hmac-secret の出力があれば ED と拡張を付ける) を作成して署名 → 有効性の確認 | 失効・署名不可 `0x27` |
 | 7 | allowList なし・空で 2 件以上なら `numberOfCredentials` を付け、残りを GetNextAssertion 用に保持 (Lease・取消トークン・チャネルも保持) | |
-| 8 | `lease.complete(consumed = 成功 かつ (UP または UV))`。silent assertion (`up: false, uv: false`) はワンタイムを消費しない | |
+| 8 | UP を伴う認証に pinUvAuthParam を使った場合は、トークンの UV フラグと権限を消す (§12.2)。`lease.complete(consumed = 成功 かつ (UP または `uv` オプションによる UV))`。silent assertion (`up: false`) は、pinUvAuthParam の有無にかかわらずワンタイムを消費しない | |
 
 | options | flags | ワンタイム |
 |---|---|---|
 | `up: true` (既定)、`uv` 任意 | UP・UV | 消費 |
 | `up: false, uv: true` | UV | 消費 |
 | `up: false, uv: false` (silent) | なし | 消費しない |
+| `up: false` + pinUvAuthParam | UV | 消費しない |
+| `up: true` + pinUvAuthParam | UP・UV | 消費 |
 
 ### 4.3 応答
 
@@ -219,7 +228,7 @@ GetAssertion (キー 0x06) も同様に扱う。
 
 | コマンド | 処理 |
 |---|---|
-| Reset | 設定「PC からのリセットを許可」が OFF なら認可前に `0x27 OPERATION_DENIED`。ON なら認可 (UP・UV) 後に全クレデンシャルを削除し、鍵交換の鍵を作り直して `0x00` |
+| Reset | 設定「PC からのリセットを許可」が OFF なら認可前に `0x27 OPERATION_DENIED`。ON なら認可 (UP・UV) 後に全クレデンシャルを削除し、鍵交換の鍵と pinUvAuthToken を作り直して `0x00` |
 | Selection | 認可 (UP) 後に `0x00`。ワンタイムは消費しない (`complete(false)`) |
 
 ## 7. authenticatorData
@@ -245,7 +254,7 @@ GetAssertion (キー 0x06) も同様に扱う。
 | 0x03 | INVALID_LENGTH | 空の要求、clientDataHash が 32 バイトでない |
 | 0x11 | CBOR_UNEXPECTED_TYPE | 型不正 |
 | 0x12 | INVALID_CBOR | CBOR デコード失敗 |
-| 0x14 | MISSING_PARAMETER | 必須パラメータ欠落 |
+| 0x14 | MISSING_PARAMETER | 必須パラメータ欠落、pinUvAuthParam に対する pinUvAuthProtocol の欠落 |
 | 0x19 | CREDENTIAL_EXCLUDED | excludeList 一致 |
 | 0x22 | INVALID_CREDENTIAL | 鍵・メタデータの不整合 |
 | 0x26 | UNSUPPORTED_ALGORITHM | ES256 非指定 |
@@ -255,10 +264,13 @@ GetAssertion (キー 0x06) も同様に扱う。
 | 0x2D | KEEPALIVE_CANCEL | ホストからのキャンセル (Bluetooth)、要求の取消 |
 | 0x2E | NO_CREDENTIALS | 該当クレデンシャルなし |
 | 0x2F | USER_ACTION_TIMEOUT | 本人確認待ちのタイムアウト (Bluetooth) |
-| 0x30 | NOT_ALLOWED | GetNextAssertion の状態なし・期限切れ・失効・チャネル不一致 |
-| 0x33 | PIN_AUTH_INVALID | 長さ 1 以上の pinAuth、hmac-secret の saltAuth の不一致 |
+| 0x30 | NOT_ALLOWED | GetNextAssertion・credentialManagement の列挙の続きの状態なし・期限切れ・失効・チャネル不一致 |
+| 0x33 | PIN_AUTH_INVALID | pinUvAuthParam の検証失敗・権限の不足・RP ID の不一致・使用中でないトークン、hmac-secret の saltAuth の不一致 |
 | 0x35 | PIN_NOT_SET | 長さ 0 の pinAuth |
-| 0x3E | INVALID_SUBCOMMAND | ClientPIN の未対応のサブコマンド |
+| 0x36 | PUAT_REQUIRED | credentialManagement で pinUvAuthParam がない |
+| 0x3E | INVALID_SUBCOMMAND | ClientPIN・credentialManagement の未対応のサブコマンド |
+| 0x3F | UV_INVALID | トークンの発行で、認可が UV を伴わない |
+| 0x40 | UNAUTHORIZED_PERMISSION | 未対応の権限 (be・lbw・acfg) のトークンの要求 |
 | 0x7F | OTHER | 想定外の例外、メタデータの読み込み・保存の失敗 (DD-07) |
 
 ## 9. シーケンス
@@ -357,16 +369,16 @@ HKDF は `fido.pin.Hkdf` (RFC 5869) で実装し、RFC 5869 付録 A のテス�
 
 ### 11.1 authenticatorClientPIN (0x06)
 
-対応するサブコマンドは getKeyAgreement (0x02) のみ。PIN の設定・トークンの発行には対応しない (GetInfo に `clientPin` を含めない)。
-認可は不要 (鍵交換の公開鍵を返すだけで、鍵や credential を使わない)。
+対応するサブコマンドは getKeyAgreement (0x02) と getPinUvAuthTokenUsingUvWithPermissions (0x06。§12.1)。
+PIN の設定・PIN によるトークンの発行には対応しない (GetInfo に `clientPin` を含めない)。その他のサブコマンドは `0x3E INVALID_SUBCOMMAND`。
 
 | キー | 名前 | 型 | 必須 | 扱い |
 |---|---|---|---|---|
-| 0x01 | pinUvAuthProtocol | uint | ○ | 1 のみ。それ以外は `0x02 INVALID_PARAMETER` |
-| 0x02 | subCommand | uint | ○ | 0x02 以外は `0x3E INVALID_SUBCOMMAND` |
+| 0x01 | pinUvAuthProtocol | uint | ○ | 1 または 2。それ以外は `0x02 INVALID_PARAMETER` |
+| 0x02 | subCommand | uint | ○ | |
 
-応答: `{1: keyAgreement}` (§10.1 の COSE_Key)。鍵交換の鍵は `Ctap2Authenticator` のインスタンス (トランスポート) ごとに持ち、
-インスタンスの生成時と Reset で作り直す。
+getKeyAgreement の応答: `{1: keyAgreement}` (§10.1 の COSE_Key)。認可は不要 (鍵交換の公開鍵を返すだけで、鍵や credential を使わない)。
+鍵交換の鍵はプロトコルごと・`Ctap2Authenticator` のインスタンス (トランスポート) ごとに持ち、インスタンスの生成時と Reset で作り直す。
 
 ### 11.2 hmac-secret
 
@@ -403,4 +415,119 @@ CredRandom の保管は DD-07 §6。
 - CredRandom のない credential (hmac-secret なしで登録) では拡張を無視し、出力を付けない。
 - CredRandom を取得できない (Keystore の認証期限切れ等) 場合は `0x27 OPERATION_DENIED`。
 - GetNextAssertion でも、元の GetAssertion の salt と共有鍵で同様に出力を作る。
+
+## 12. CTAP 2.1
+
+### 12.1 pinUvAuthToken (内蔵 UV による発行)
+
+`ClientPin` が pinUvAuthToken (32 バイトの乱数) とその状態を持つ (CTAP 2.1 §6.5.2.1)。トークンはプロトコルごとに持ち、
+新しいトークンの発行・Reset ですべて作り直す。
+
+| 状態 | 内容 |
+|---|---|
+| 使用中 | 発行で開始。次の場合に終了する: 発行から 19 秒以内に一度も使われない (NFC の既定の上限 19.8 秒以下)、発行から 600 秒が経過、発行時の Lease の失効 (受付の停止・前面離脱)、トランスポートのセッションの変化 (`resetSession`。NFC の切断など)、新しいトークンの発行、Reset |
+| 権限 | mc (0x01)、ga (0x02)、cm (0x04)。未定義のビットは無視する |
+| 権限の RP ID | 発行時に指定された RP ID。指定がなければ最初の登録・認証で結び付ける |
+| UV フラグ | 発行時に立て、UP を伴う登録・認証で使った後に消す |
+
+UP のフラグは持たない (登録・認証は毎回受付ゲートで UP を得るため)。
+
+**getPinUvAuthTokenUsingUvWithPermissions (ClientPIN 0x06)**
+
+| キー | 名前 | 型 | 必須 |
+|---|---|---|---|
+| 0x01 | pinUvAuthProtocol | uint | ○ |
+| 0x03 | keyAgreement | COSE_Key | ○ |
+| 0x09 | permissions | uint | ○ |
+| 0x0A | rpId | text | |
+
+| # | 処理 | エラー |
+|---|---|---|
+| 1 | 必須パラメータ・型の確認、プロトコルの選択 | `0x14` / `0x11` / `0x02` |
+| 2 | permissions が 0 | `0x02 INVALID_PARAMETER` |
+| 3 | 未対応の権限 (be 0x08、lbw 0x10、acfg 0x20) を含む | `0x40 UNAUTHORIZED_PERMISSION` |
+| 4 | `decapsulate(keyAgreement)` で共有鍵を導出 | `0x02` |
+| 5 | 内蔵 UV = 受付ゲートの認可 (`PIN_UV_AUTH_TOKEN`、UV 要)。NFC は受付外なら即時に拒否、Bluetooth は本人確認を待つ | `Denied` のステータス。UV を伴わない許可は `0x3F UV_INVALID` |
+| 6 | すべてのトークンを作り直し、使用を開始する (Lease を保持)。権限・RP ID を設定する | |
+| 7 | `lease.complete(consumed = false)` (ワンタイムは消費しない) | |
+
+応答: `{2: encrypt(共有鍵, pinUvAuthToken)}`。手順 1〜4 は認可の前に行う。
+
+### 12.2 MakeCredential / GetAssertion での使用
+
+pinUvAuthParam (= `authenticate(pinUvAuthToken, clientDataHash)`) を次の順に検証する (CTAP 2.1 §6.1.2 手順 11.1、§6.2.2 手順 6.1)。
+いずれかに当たれば `0x33 PIN_AUTH_INVALID`。
+
+1. トークンが使用中であり、HMAC が一致する (プロトコルは要求の pinUvAuthProtocol)
+2. 権限 (登録は mc、認証は ga) がある
+3. 権限の RP ID が設定されていれば、要求の RP ID と一致する
+4. トークンの UV フラグが立っている
+
+成功した場合は、権限の RP ID が未設定なら要求の RP ID を結び付け、応答の UV フラグを立てる。そのうえで **受付ゲートの認可を必ず行う**
+(トークンがあっても、前面表示中かつ受付中でなければ登録・認証しない。AGENTS.md §5.1)。
+UP を伴う登録・認証に使った後は、トークンの UV フラグと権限 (lbw 以外。本アプリは lbw に対応しないため全権限) を消す (同 §6.1.2 手順 14.4)。
+silent assertion (`up: false`) に使った場合は消さない。
+
+### 12.3 credProtect
+
+| レベル | 名前 | GetAssertion で使える条件 |
+|---|---|---|
+| 1 (既定) | userVerificationOptional | 常に |
+| 2 | userVerificationOptionalWithCredentialIDList | 応答の UV フラグが立つ、または allowList で指定された |
+| 3 | userVerificationRequired | 応答の UV フラグが立つ |
+
+- MakeCredential の `"credProtect": <1〜3>` を保存し (DD-06 §2)、拡張の出力 `{"credProtect": <レベル>}` を返す。指定がなければレベル 1 で、出力しない。
+  1〜3 以外は `0x02`、整数でなければ `0x11`。
+- GetAssertion では、対象の credential を決めた後に上の条件で絞る (CTAP 2.1 §6.2.2 手順 7.4・7.5)。残りが 0 件なら `0x2E`。
+- excludeList はレベル 3 の credential を、認可が UV 済みの場合のみ一致として扱う (§3.2 手順 4)。
+- credentialManagement の列挙では絞らず、レベルを返す (§12.4)。
+
+### 12.4 authenticatorCredentialManagement (0x0A)
+
+discoverable credential の件数の取得・列挙・削除・ユーザー情報の更新を行う (CTAP 2.1 §6.8)。non-discoverable credential は対象外。
+
+| キー | 名前 | 型 |
+|---|---|---|
+| 0x01 | subCommand | uint |
+| 0x02 | subCommandParams | map (`{1: rpIDHash, 2: credentialID, 3: user}`) |
+| 0x03 | pinUvAuthProtocol | uint |
+| 0x04 | pinUvAuthParam | bytes |
+
+| サブコマンド | 認証対象 (pinUvAuthParam) | 権限の RP ID | 応答 |
+|---|---|---|---|
+| getCredsMetadata (0x01) | `0x01` | なしのみ | `{1: 件数, 2: 残りの見積もり (1000 − 件数)}` |
+| enumerateRPsBegin (0x02) | `0x02` | なしのみ | `{3: rp, 4: rpIDHash, 5: totalRPs}` (RP ID の昇順) |
+| enumerateRPsGetNextRP (0x03) | — (続き) | — | `{3: rp, 4: rpIDHash}` |
+| enumerateCredentialsBegin (0x04) | `0x04 ‖ CBOR(subCommandParams)` | なし、または rpIDHash と一致 | `{6: user, 7: credentialID, 8: publicKey, 9: totalCredentials, 10: credProtect}` (作成日時の新しい順) |
+| enumerateCredentialsGetNextCredential (0x05) | — (続き) | — | 上と同じ (9 を除く) |
+| deleteCredential (0x06) | `0x06 ‖ CBOR(subCommandParams)` | なし、または credential の RP と一致 | なし |
+| updateUserInformation (0x07) | `0x07 ‖ CBOR(subCommandParams)` | なし、または credential の RP と一致 | なし。name・displayName を置き換える (指定がなければ削除)。user.id が異なれば `0x02` |
+
+| 条件 | ステータス |
+|---|---|
+| pinUvAuthParam がない | `0x36 PUAT_REQUIRED` |
+| pinUvAuthProtocol がない / 未対応 | `0x14` / `0x02` |
+| 検証の失敗、cm 権限がない、権限の RP ID の条件に合わない | `0x33 PIN_AUTH_INVALID` |
+| 対象がない (credential が 0 件、該当する credential がない) | `0x2E NO_CREDENTIALS` |
+| 続きの状態がない・種類が違う・30 秒経過・開始時の Lease の失効・セッションの変化・トークンの使用終了 | `0x30 NOT_ALLOWED` |
+| 未対応のサブコマンド | `0x3E` |
+
+- 認証付きのサブコマンドは、検証の後に受付ゲートの認可 (`CREDENTIAL_MANAGEMENT`) を得る。ワンタイムは消費しない。UP は求めない。
+- 列挙の続きは認可を再度行わず、開始時の Lease とトークンが有効な間だけ受け付ける。credentialManagement 以外のコマンドを受信すると、列挙の途中状態を破棄する。
+- 削除・更新は `CredentialStore.delete` / `updateUser` で行う (DD-07 §5)。
+
+### 12.5 CTAP 2.0 との共存と設計判断
+
+`versions` に `FIDO_2_0` と `FIDO_2_1` を並べ、両方のクライアントに対応する。2.1 の追加は新しいコマンド・サブコマンド・オプション・
+GetInfo の項目であり、2.0 のクライアントは知らない項目を無視して従来どおり動く。
+
+| 項目 | 内容 |
+|---|---|
+| 2.0 のクライアント | `uv` オプション (内蔵 UV) で登録・認証する。hmac-secret の鍵交換は Protocol 1 |
+| 2.1 のクライアント | 内蔵 UV で pinUvAuthToken を得て pinUvAuthParam を付ける (§12.1、§12.2)。Protocol 2 を優先する |
+| NFC の SELECT の応答 | `FIDO_2_0` のまま (2.1 でも同じ値) |
+| FIDO_2_1 の必須要件 (CTAP 2.1 §9) | hmac-secret、`uv` (rk に対して)、`credMgmt`、credProtect、`pinUvAuthToken`、Protocol 2 を満たす |
+| `makeCredUvNotRqd: true` | すべての登録で受付ゲートの本人確認を経るため、UV の指定を必須にせず `0x36 PUAT_REQUIRED` を返さない |
+| MakeCredential の `up: true` | 2.1 で許容されているため受け付ける (外部レビューの F-07 で不採用とした拒否と整合する) |
+| 対象外 | clientPIN (PIN)、authenticatorConfig、largeBlobs、enterprise attestation、NFC の待機 (AP-C F-04)、試行版 (`FIDO_2_1_PRE`、0x41) |
 

@@ -76,6 +76,8 @@
     <string name="credential_discoverable">Passkey (discoverable)</string>
     <string name="credential_non_discoverable">Non-discoverable</string>
     <string name="credential_hmac_secret">hmac-secret (PRF)</string>
+    <string name="credential_cred_protect_list">credProtect 2: UV or ID list</string>
+    <string name="credential_cred_protect_required">credProtect 3: UV required</string>
     <string name="security_level_strongbox">StrongBox</string>
     <string name="security_level_tee">TEE</string>
     <string name="security_level_software">Software</string>
@@ -149,7 +151,7 @@
     <string name="about_version">Version</string>
     <string name="about_aaguid">AAGUID</string>
     <string name="about_protocols">Protocols</string>
-    <string name="about_protocols_value" tools:ignore="TypographyDashes">CTAP 2.0 (FIDO_2_0) over NFC (ISO 7816-4 / HCE), CTAPHID over Bluetooth HID (experimental)</string>
+    <string name="about_protocols_value" tools:ignore="TypographyDashes">CTAP 2.0 / 2.1 (FIDO_2_0, FIDO_2_1) over NFC (ISO 7816-4 / HCE), CTAPHID over Bluetooth HID (experimental)</string>
     <string name="about_algorithms">Algorithms</string>
     <string name="about_security">Security</string>
     <string name="about_security_text">Private keys are generated in the Android Keystore (StrongBox or TEE) and cannot be exported. Each key can be used only for a limited time after user verification, only while the device is unlocked, and only while this app is in the foreground.</string>

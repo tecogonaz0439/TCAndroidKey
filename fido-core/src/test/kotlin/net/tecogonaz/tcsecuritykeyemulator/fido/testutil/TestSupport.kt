@@ -51,7 +51,7 @@ class InMemoryCredentialStore : CredentialStore {
         val (x, y) = EcKeys.coordinates(kp.public as ECPublicKey)
         val c = StoredCredential(
             id, rpId, rpName, user, discoverable, now++, null, 0, x, y, KeySecurityLevel.SOFTWARE,
-            hmacSecret = options.hmacSecret
+            hmacSecret = options.hmacSecret, credProtect = options.credProtect
         )
         creds[c.idHex] = c
         keys[c.idHex] = kp.private
@@ -88,6 +88,13 @@ class InMemoryCredentialStore : CredentialStore {
     }
 
     override fun list(): List<StoredCredential> = creds.values.toList()
+
+    override fun updateUser(id: ByteArray, user: UserEntity): Boolean {
+        val k = net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.Hex.encode(id)
+        val cur = creds[k] ?: return false
+        creds[k] = cur.copy(user = cur.user.copy(name = user.name, displayName = user.displayName))
+        return true
+    }
 
     override fun delete(id: ByteArray): Boolean {
         val k = net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.Hex.encode(id)

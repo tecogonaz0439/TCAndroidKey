@@ -8,7 +8,7 @@ AI コーディングエージェント (Claude Code、Codex など) と開発�
 - **アプリ名**: セキュリティキーエミュレータ / Security Key Emulator
 - **プロジェクト名・リポジトリ**: `TCSecurityKeyEmulator` (https://github.com/tecogonaz0439/TCSecurityKeyEmulator)。旧名 `TCAndroidKey`
 - **applicationId / パッケージ**: `net.tecogonaz.tcsecuritykeyemulator`。旧名 `net.tecogonaz.tcandroidkey` とは別アプリ扱い
-- **内容**: Android 端末を FIDO2 (CTAP 2.0) セキュリティキーとして動作させる。NFC (HCE) が主、Bluetooth HID は実験的、USB は技術的に不可
+- **内容**: Android 端末を FIDO2 (CTAP 2.0 / 2.1) セキュリティキーとして動作させる。NFC (HCE) が主、Bluetooth HID は実験的、USB は技術的に不可
 - **前提 (最重要)**: **FIDO / FIDO2 Web アプリケーションのテスト用ツール**であり、**YubiKey などの物理セキュリティキーの代替としない**。
   この前提は設計書 (PRE-01〜05)、利用規約、セキュリティポリシー、初回起動時のダイアログに明記している。機能追加時もこの前提を崩さない
 - **技術スタック**: Android 15+ (minSdk 35、compileSdk / targetSdk 37)、Kotlin 2.4、Jetpack Compose (Material 3)、AGP 9.3、Gradle 9.5、JDK 21
@@ -18,17 +18,17 @@ AI コーディングエージェント (Claude Code、Codex など) と開発�
 ## 2. 現在の状態 (2026-11-05 時点)
 
 - 作業ブランチ: `main` (リポジトリの既定ブランチ。旧名 `claude/friendly-sagan-ipwxxv`)
-- 実装済み: CTAP 2.0 認証器、NFC / Bluetooth HID、Keystore 保管、認可ゲート、UI 一式、言語設定、利用規約・セキュリティポリシー表示、アイコン、
-  PIN/UV Auth Protocol 1 / 2 (`fido.pin`)、hmac-secret 拡張 (ClientPIN は getKeyAgreement のみ)
+- 実装済み: CTAP 2.0 / 2.1 認証器、NFC / Bluetooth HID、Keystore 保管、認可ゲート、UI 一式、言語設定、利用規約・セキュリティポリシー表示、アイコン、
+  PIN/UV Auth Protocol 1 / 2 (`fido.pin`)、hmac-secret・credProtect 拡張、内蔵 UV による pinUvAuthToken、credentialManagement
 - 外部レビュー (ChatGPT Pro、対象 `ecd6e49`) の指摘 29 件は精査・対応済み。判定と不採用の理由は [review/FIX_PLAN.md](review/FIX_PLAN.md)
-- 単体テスト 131 件 (fido-core 127、app 4) 全件成功、lint 指摘 0 件
+- 単体テスト 156 件 (fido-core 152、app 4) 全件成功、lint 指摘 0 件
 - **未実施**:
-  - 実機試験 ([DD-10](docs/design/detail/10_test-cases.md) の IT-01〜35、特に外部レビュー対応の IT-24〜32。hmac-secret の CT-06)
+  - 実機試験 ([DD-10](docs/design/detail/10_test-cases.md) の IT-01〜35、特に外部レビュー対応の IT-24〜32。hmac-secret・CTAP 2.1 の CT-06・CT-08)
   - 互換性マトリクスの記録 (DD-10 §4、[AP-C](docs/design/appendix/C_roadmap.md) F-01)
   - GitHub のリポジトリ名の変更 (所有者が手動で行う予定。文書・アプリ内の URL は新名称に変更済み)
-- 進行中: [AP-C](docs/design/appendix/C_roadmap.md) の F-03 (CTAP 2.1: pinUvAuthToken・credProtect・credentialManagement) → F-02 (clientPIN)。
+- 進行中: [AP-C](docs/design/appendix/C_roadmap.md) の F-02 (clientPIN: PIN の設定・変更・PIN によるトークンの発行)。
   手順ごとに main へコミットする
-- 今後の課題の候補は [AP-C](docs/design/appendix/C_roadmap.md) §2 (clientPIN、CTAP 2.1、試験用の操作機能など)
+- 今後の課題の候補は [AP-C](docs/design/appendix/C_roadmap.md) §2 (clientPIN、NFC の待機、試験用の操作機能など)
 
 ## 3. リポジトリ構成
 
@@ -36,7 +36,7 @@ AI コーディングエージェント (Claude Code、Codex など) と開発�
 fido-core/   FIDO2 プロトコル (Android 非依存の純 Kotlin/JVM)。JVM の単体テストで検証する
   cbor/      CTAP2 canonical CBOR
   ctap2/     Ctap2Authenticator (コマンド処理)、CredentialStore / AuthorizationPolicy / AuthorizationLease / KeepAlive、
-             ClientPin (0x06)、HmacSecret (拡張)
+             ClientPin (0x06、pinUvAuthToken)、CredentialManagement (0x0A)、HmacSecret・CredProtect (拡張)
   pin/       PIN/UV Auth Protocol 1 / 2 (ECDH・HKDF・AES-CBC・HMAC)
   nfc/       ISO 7816-4 APDU (NfcCtapProcessor)
   hid/       CTAPHID (CtapHidProcessor)
@@ -80,6 +80,8 @@ review/      外部レビューの依頼文と対応記録 (履歴として旧�
 - 判定とワンタイムの予約は同じロック内で行う。明示的な停止・前面離脱では epoch を進めて全 Lease を失効させ、
   ワンタイムの「消費」では失効させない (GetNextAssertion の継続のため)。単純な `isArmed()` の追加で済ませない。
 - `Ctap2Authenticator` は、鍵の生成・署名の直前と応答の直前に Lease と取消トークンを確認し、すべての経路で `lease.complete()` を呼ぶ。
+- pinUvAuthToken (CTAP 2.1) があっても、登録・認証・資格情報の管理のたびに受付ゲートの認可を得る。トークンの発行・資格情報の管理・
+  silent assertion ではワンタイムを消費しない。トークンは発行時の Lease・セッションの世代に結び付ける (DD-01 §12、DD-05 §2.5)。
 - `Ctap2Authenticator.process` と CTAPHID のワーカーは例外をすべて捕捉する (Kotlin では検査例外も素通りし、ワーカーで落ちるとアプリが終了する)。
 - NFC は接続世代で古い応答を破棄する (`FidoHostApduService`)。CTAPHID の取消は要求ごとの操作 (トークン) で扱う。
 - Google Play 開発者サービスを使わない。**INTERNET 権限を追加しない** (利用規約 第 4 条で通信しないと約束している)。
@@ -96,8 +98,9 @@ review/      外部レビューの依頼文と対応記録 (履歴として旧�
 
 ### 5.3 プロトコル
 
-- CTAP 2.0 (`FIDO_2_0`) のみ、ES256 のみ、PIN なし (内蔵 UV)。拡張は hmac-secret のみ。ClientPIN は鍵交換の getKeyAgreement のみで、
-  pinProtocols は `[1]`。GetInfo に未対応の機能 (clientPin 等) を広告しない。
+- CTAP 2.0 / 2.1 (`FIDO_2_0`、`FIDO_2_1`)、ES256 のみ、PIN なし (内蔵 UV)。拡張は credProtect・hmac-secret。pinUvAuthProtocols は `[2, 1]`
+  (2.0 のクライアントのため Protocol 1 を残す)。GetInfo に未対応の機能 (clientPin 等) を広告しない。
+- 2.1 の判断 (DD-01 §12.5): `makeCredUvNotRqd: true` とし `PUAT_REQUIRED` を返さない、MakeCredential の `up: true` を受け付ける。
 - メタデータの JSON に項目を足すときは任意項目とし、ない場合は既定値で読む (既存の端末の credentials.bin を読めるようにする)。
 - 外部レビューで「不採用」と判断した修正案 (MakeCredential の `up:true` 拒否、CBOR のキー順序検証、NFC P1/P2 の厳格検証、
   Bluetooth の transports 変更など) は、理由が [review/FIX_PLAN.md](review/FIX_PLAN.md) にある。蒸し返す場合は理由を確認する。

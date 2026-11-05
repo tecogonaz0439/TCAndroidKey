@@ -111,7 +111,7 @@ class NfcCtapProcessorTest {
         val resp = out.toByteArray()
         assertEquals(0, resp[0].toInt())
         val info = Cbor.decode(resp, 1, resp.size - 1) as Map<*, *>
-        assertEquals(listOf("FIDO_2_0"), info[1L])
+        assertEquals(listOf("FIDO_2_0", "FIDO_2_1"), info[1L])
     }
 
     @Test

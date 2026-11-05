@@ -248,6 +248,19 @@ private fun CredentialCard(credential: StoredCredential, onDelete: () -> Unit) {
                     if (credential.hmacSecret) {
                         AssistChip(onClick = {}, label = { Text(stringResource(R.string.credential_hmac_secret)) })
                     }
+                    if (credential.credProtect > 1) {
+                        AssistChip(
+                            onClick = {},
+                            label = {
+                                Text(
+                                    stringResource(
+                                        if (credential.credProtect >= 3) R.string.credential_cred_protect_required
+                                        else R.string.credential_cred_protect_list
+                                    )
+                                )
+                            }
+                        )
+                    }
                     val weakKey = credential.securityLevel == KeySecurityLevel.SOFTWARE ||
                         credential.securityLevel == KeySecurityLevel.UNKNOWN
                     AssistChip(

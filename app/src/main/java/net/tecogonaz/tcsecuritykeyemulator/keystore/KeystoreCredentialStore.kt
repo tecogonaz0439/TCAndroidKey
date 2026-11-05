@@ -173,7 +173,8 @@ class KeystoreCredentialStore(
             publicKeyX = x,
             publicKeyY = y,
             securityLevel = securityLevelOf(keyPair.private),
-            hmacSecret = options.hmacSecret
+            hmacSecret = options.hmacSecret,
+            credProtect = options.credProtect
         )
         try {
             saveAndCommit(LinkedHashMap(cache).apply { put(credential.idHex, credential) })
@@ -301,6 +302,15 @@ class KeystoreCredentialStore(
     override fun list(): List<StoredCredential> {
         ensureLoaded()
         return cache.values.sortedWith(StoredCredential.NEWEST_FIRST)
+    }
+
+    @Synchronized
+    override fun updateUser(id: ByteArray, user: UserEntity): Boolean {
+        ensureLoaded()
+        val current = cache[Hex.encode(id)] ?: return false
+        val updated = current.copy(user = current.user.copy(name = user.name, displayName = user.displayName))
+        saveAndCommit(LinkedHashMap(cache).apply { put(updated.idHex, updated) })
+        return true
     }
 
     /** メタデータから外してから鍵を削除する (保存に失敗した場合は何も変えない)。 */

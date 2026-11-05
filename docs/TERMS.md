@@ -1,6 +1,6 @@
 # Terms of Use
 
-**Last updated: 2026-11-03**
+**Last updated: 2026-11-05**
 
 ## 1. Scope
 
@@ -14,7 +14,7 @@ These Terms govern the use of the App and do not restrict any rights granted und
 
 ## 2. What the App Is
 
-The App makes an Android device act as a FIDO2 (CTAP 2.0) security key. It is **a testing tool for checking registration and authentication in web applications that use FIDO / FIDO2 (WebAuthn)**.
+The App makes an Android device act as a FIDO2 (CTAP 2.0 / 2.1) security key. It is **a testing tool for checking registration and authentication in web applications that use FIDO / FIDO2 (WebAuthn)**.
 
 **The App is not intended to be used as a replacement for physical security keys such as YubiKey.** Do not use the App as an everyday authentication method, as multi-factor authentication for production services, or as a means of account recovery.
 

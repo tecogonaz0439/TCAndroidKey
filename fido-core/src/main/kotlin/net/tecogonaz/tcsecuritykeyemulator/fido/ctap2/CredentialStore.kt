@@ -29,6 +29,7 @@ enum class KeySecurityLevel { STRONGBOX, TEE, SOFTWARE, UNKNOWN }
  * @property publicKeyX P-256 公開鍵の X 座標 (32 バイト)。
  * @property publicKeyY P-256 公開鍵の Y 座標 (32 バイト)。
  * @property hmacSecret hmac-secret 拡張 (CredRandom) が有効か。
+ * @property credProtect credProtect の保護レベル (1〜3。既定 1)。
  */
 data class StoredCredential(
     val id: ByteArray,
@@ -42,7 +43,8 @@ data class StoredCredential(
     val publicKeyX: ByteArray,
     val publicKeyY: ByteArray,
     val securityLevel: KeySecurityLevel,
-    val hmacSecret: Boolean = false
+    val hmacSecret: Boolean = false,
+    val credProtect: Int = CredProtect.USER_VERIFICATION_OPTIONAL
 ) {
     val idHex: String get() = Hex.encode(id)
 
@@ -58,7 +60,8 @@ data class StoredCredential(
         discoverable == other.discoverable && createdAtMillis == other.createdAtMillis &&
         lastUsedAtMillis == other.lastUsedAtMillis && signCount == other.signCount &&
         publicKeyX.contentEquals(other.publicKeyX) && publicKeyY.contentEquals(other.publicKeyY) &&
-        securityLevel == other.securityLevel && hmacSecret == other.hmacSecret
+        securityLevel == other.securityLevel && hmacSecret == other.hmacSecret &&
+        credProtect == other.credProtect
 
     override fun hashCode(): Int = id.contentHashCode()
 
@@ -76,9 +79,11 @@ data class StoredCredential(
  * 登録時に指定する credential の属性。
  *
  * @property hmacSecret hmac-secret 拡張用の CredRandom を作る (DD-01 §11)。
+ * @property credProtect credProtect の保護レベル (DD-01 §12.3)。
  */
 data class CredentialOptions(
-    val hmacSecret: Boolean = false
+    val hmacSecret: Boolean = false,
+    val credProtect: Int = CredProtect.USER_VERIFICATION_OPTIONAL
 )
 
 /**
@@ -118,6 +123,13 @@ interface CredentialStore {
     fun incrementSignCount(credential: StoredCredential): Long
 
     fun list(): List<StoredCredential>
+
+    /**
+     * credential のユーザー情報 (name・displayName) を [user] に置き換える (credentialManagement の updateUserInformation)。
+     * user.id は変えない。該当する credential がなければ false。
+     */
+    fun updateUser(id: ByteArray, user: UserEntity): Boolean
+
     fun delete(id: ByteArray): Boolean
     fun deleteAll()
 }

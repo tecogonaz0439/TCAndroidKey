@@ -107,7 +107,7 @@ class CtapHidProcessorTest {
         assertEquals(CtapHidProcessor.CMD_CBOR, cmd)
         assertEquals(0, payload[0].toInt())
         val info = Cbor.decode(payload, 1, payload.size - 1) as Map<*, *>
-        assertEquals(listOf("FIDO_2_0"), info[1L])
+        assertEquals(listOf("FIDO_2_0", "FIDO_2_1"), info[1L])
     }
 
     @Test

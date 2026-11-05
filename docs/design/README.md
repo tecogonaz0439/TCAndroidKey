@@ -108,3 +108,4 @@ flowchart LR
 | 1.2 | 2026-11-02 | 言語設定 (FR-19) と注意書きの表示 (FR-20) を追加。改訂した文書: BD-02、BD-06、DD-06、DD-08、DD-10 |
 | 1.3 | 2026-11-03 | 名称変更: アプリ名を「セキュリティキーエミュレータ / Security Key Emulator」、プロジェクト名・リポジトリ名を `TCSecurityKeyEmulator`、applicationId・パッケージ名を `net.tecogonaz.tcsecuritykeyemulator` に変更 (旧 `TCAndroidKey` / `net.tecogonaz.tcandroidkey`)。文書番号の接頭辞を `TCSKE-` に変更。全文書の名称・URL を更新。アプリのアイコン (BD-06 §6)、旧版からの移行 (BD-09 §4)、app の単体テスト (DD-10 §1.10) を追記 |
 | 1.4 | 2026-11-05 | PIN/UV Auth Protocol 1 / 2 (DD-01 §10) と hmac-secret 拡張・ClientPIN の getKeyAgreement (FR-21、DD-01 §11) を追加。改訂した文書: BD-02、BD-04、BD-05、DD-01、DD-04、DD-06〜08、DD-10、AP-C |
+| 1.5 | 2026-11-05 | CTAP 2.1 (FR-22〜24: 内蔵 UV による pinUvAuthToken、credProtect、authenticatorCredentialManagement。DD-01 §12) を追加し、`FIDO_2_0` と `FIDO_2_1` を共存させる。改訂した文書: BD-01、BD-02、BD-04、BD-05、DD-01、DD-02、DD-04〜08、DD-10、AP-A、AP-C |
