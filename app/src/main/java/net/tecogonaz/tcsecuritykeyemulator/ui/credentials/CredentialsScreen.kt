@@ -192,7 +192,7 @@ fun CredentialsScreen(viewModel: MainViewModel, actions: UiActions) {
 /**
  * タイトルの編集 (FR-27)。空欄で保存すると既定のタイトル (rp.name、なければ RP ID) に戻る。
  * 入力は [StoredCredential.MAX_LABEL_LENGTH] コードポイントまで。保存時の正規化はストアが行う。
- * 既定のタイトルは入力欄に薄く表示しない (入力済みの値と見分けにくいため)。説明文で示す。
+ * 未入力の欄には既定のタイトルを薄い色 ([PLACEHOLDER_ALPHA]) で表示する (入力済みの値と見分けるため)。
  */
 @Composable
 private fun EditTitleDialog(credential: StoredCredential, onDismiss: () -> Unit, onSave: (String?) -> Unit) {
@@ -212,6 +212,15 @@ private fun EditTitleDialog(credential: StoredCredential, onDismiss: () -> Unit,
                         if (value.text.codePointCount(0, value.text.length) <= StoredCredential.MAX_LABEL_LENGTH) text = value
                     },
                     label = { Text(stringResource(R.string.dialog_edit_title_label)) },
+                    placeholder = {
+                        // 入力済みの値と見分けられるよう、既定のプレースホルダーの色より薄くする
+                        Text(
+                            credential.defaultTitle,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = PLACEHOLDER_ALPHA),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
                     singleLine = true,
                     trailingIcon = if (text.text.isNotEmpty()) {
                         {
@@ -243,6 +252,9 @@ private fun EditTitleDialog(credential: StoredCredential, onDismiss: () -> Unit,
         }
     )
 }
+
+/** タイトルの入力欄のプレースホルダーの不透明度 (Material の無効状態の 0.38 と同程度)。 */
+private const val PLACEHOLDER_ALPHA = 0.38f
 
 /** メタデータを読み込めない場合の案内と初期化ボタン。 */
 @Composable
