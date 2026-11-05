@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-04 |
-| 版数 | 1.6 |
+| 版数 | 1.7 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.7 (2026-11-05): コードレビュー (2026-11-05) の指摘への対応 (重複の整理)。`CtapParams` (CTAP パラメータの共通の取得)、`KeystoreEncryptedFile` (暗号化ファイルの共通処理) を追加 |
 | 改訂 | 1.6 (2026-11-05): コードレビュー (2026-11-05) の指摘への対応 (`Cbor.rawMapValues`、`PinStore.revision`、`StoredCredential.nextCreatedAt`) |
 | 改訂 | 1.5 (2026-11-05): `PinStore`・`InMemoryPinStore`・`KeystorePinStore`、`ClientPin` の PIN 関連サブコマンドを追加 |
 | 改訂 | 1.4 (2026-11-05): `CredentialManagement`・`CredProtect`、`ClientPin` の pinUvAuthToken、`CredentialStore.updateUser`、`CtapOperation` の追加 |
@@ -122,6 +123,7 @@ classDiagram
 | `InMemoryPinStore` | メモリ上の `PinStore` (単体テスト・`Ctap2Authenticator` の既定値) |
 | `CredentialManagement` | authenticatorCredentialManagement (0x0A。DD-01 §12.4)。列挙の途中状態を持ち、他のコマンドで破棄する |
 | `CredProtect` | credProtect 拡張 (DD-01 §12.3)。登録の要求の解釈と、認証での絞り込み |
+| `CtapParams.kt` (internal 拡張関数) | CTAP パラメータ (デコード済みのマップ) の取得。`requireLong` / `requireBytes` / `requireText` / `requireMap` / `requireList`、`optLong` / `optBytes` / `optText` / `optMap` / `optList` / `optBool`。欠落は `0x14`、型の不正は `0x11` に統一する。全コマンド・拡張で使う |
 | `HmacSecret` / `HmacSecretInput` | hmac-secret 拡張 (DD-01 §11.2)。登録の要求の判定、認証の入力の検証と salt の復号、出力の暗号化 |
 | `StoredCredential` | クレデンシャルのメタデータ (DD-06 §2。`hmacSecret`・`credProtect` を含む)。秘密鍵は含まない。等価性は全フィールドの内容 (StateFlow の更新を抑止しないため)。同一性は `isSameCredential`。並び順 `NEWEST_FIRST` (作成日時の新しい順、同時刻は ID 順)。`nextCreatedAt` (既存の最大値より大きい作成日時) |
 | `UserEntity` | `id` / `name` / `displayName` |
@@ -193,6 +195,7 @@ classDiagram
 | クラス | 責務 |
 |---|---|
 | `KeystoreCredentialStore` | `CredentialStore` の Android Keystore 実装 (DD-07)。保存済みと一致する不変スナップショット + `StateFlow<List<StoredCredential>>` (UI 用)、`StateFlow<StorageStatus>` (読み込み状態)。読み込み時に鍵が存在しないメタデータを除去。読み込めない場合は UNAVAILABLE (DD-07 §5) |
+| `KeystoreEncryptedFile` (internal) | Keystore の AES-256-GCM 鍵で暗号化したファイルの読み書き (DD-06 §3.1)。IV ‖ 暗号文、AtomicFile、鍵の生成・削除、読めない場合の IOException。`MetadataStore`・`KeystorePinStore` が使う |
 | `MetadataStore` (internal) | メタデータの暗号化保存 (DD-06 §3) |
 | `KeystorePinStore` | `PinStore` の Android 実装 (DD-07 §7)。`files/pin.bin` を Keystore の AES-GCM 鍵で暗号化。`StateFlow<PinStatus>` (UI 用) |
 

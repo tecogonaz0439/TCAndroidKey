@@ -225,4 +225,17 @@ class CredentialManagementTest {
         assertEquals(CtapStatus.OK, authenticator.process(request)[0].toInt())
         assertEquals("reordered", store.list().single { it.id.contentEquals(ids["a1"]) }.user.name)
     }
+
+    @Test
+    fun wronglyTypedIdsAreUnexpectedTypeNotMissing() {
+        val ids = setup()
+        val token = client.uvToken(2, cm)
+        val descriptor = linkedMapOf("id" to ids.getValue("a1"), "type" to "public-key")
+        val textUserId = mapOf<Long, Any>(2L to descriptor, 3L to linkedMapOf("id" to "not-bytes", "name" to "x"))
+        assertEquals(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE, cm(7, textUserId, token).first)
+        val textCredentialId = mapOf<Long, Any>(2L to linkedMapOf("id" to "not-bytes", "type" to "public-key"))
+        assertEquals(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE, cm(6, textCredentialId, token).first)
+        val noId = mapOf<Long, Any>(2L to linkedMapOf("type" to "public-key"))
+        assertEquals(CtapStatus.ERR_MISSING_PARAMETER, cm(6, noId, token).first)
+    }
 }

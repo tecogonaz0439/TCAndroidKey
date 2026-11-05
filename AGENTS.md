@@ -22,7 +22,7 @@ AI コーディングエージェント (Claude Code、Codex など) と開発�
   PIN/UV Auth Protocol 1 / 2 (`fido.pin`)、hmac-secret・credProtect 拡張、内蔵 UV・PIN による pinUvAuthToken、credentialManagement、
   clientPIN (PIN の設定・変更・照合。アプリでは状態の表示と消去)
 - 外部レビュー (ChatGPT Pro、対象 `ecd6e49`) の指摘 29 件は精査・対応済み。判定と不採用の理由は [review/FIX_PLAN.md](review/FIX_PLAN.md)
-- 単体テスト 173 件 (fido-core 169、app 4) 全件成功、lint 指摘 0 件。python-fido2 による照合 (DD-10 CT-05、CT-07) 成功
+- 単体テスト 174 件 (fido-core 170、app 4) 全件成功、lint 指摘 0 件。python-fido2 による照合 (DD-10 CT-05、CT-07) 成功
 - **未実施**:
   - 実機試験 ([DD-10](docs/design/detail/10_test-cases.md) の IT-01〜35、特に外部レビュー対応の IT-24〜32。hmac-secret・CTAP 2.1・clientPIN の CT-06・CT-08・CT-09、IT-36・IT-37)
   - 互換性マトリクスの記録 (DD-10 §4、[AP-C](docs/design/appendix/C_roadmap.md) F-01)
@@ -110,6 +110,8 @@ review/      外部レビューの依頼文と対応記録 (履歴として旧�
 - 新規ファイルの先頭に SPDX ヘッダー (`SPDX-FileCopyrightText: 2026 tecogonaz <tecogonaz@kusugami-lab.net>` / `SPDX-License-Identifier: Apache-2.0`)。
 - コメント・KDoc は日本語。識別子とプロトコル用語は英語のまま。
 - DI フレームワーク・Room・GMS は使わない (手動 DI: `AppContainer`)。プロトコル処理は fido-core に置き、JVM テストを付ける。
+- CTAP パラメータの取得は `CtapParams.kt` の拡張関数を使う (欠落 `0x14` / 型の不正 `0x11` を統一するため。個別のアクセサを作らない)。
+  Keystore で暗号化するファイルは `KeystoreEncryptedFile` を使う。
 - 文字列は `values/strings.xml` (英語) と `values-ja/strings.xml` (日本語) の**両方**に追加する。件数を含む文字列は `plurals`。
 - UI 部品は TCSameuraDamMonitor の部品 (`ui/common`) を優先して使う。
 

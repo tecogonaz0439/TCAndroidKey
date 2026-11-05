@@ -4,9 +4,6 @@
 package net.tecogonaz.tcsecuritykeyemulator.keystore
 
 import android.content.Context
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
-import android.util.AtomicFile
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,19 +12,12 @@ import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.PinCheck
 import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.PinStatus
 import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.PinStore
 import org.json.JSONObject
-import java.io.File
-import java.io.FileNotFoundException
 import java.io.IOException
-import java.security.KeyStore
 import java.security.MessageDigest
-import javax.crypto.Cipher
-import javax.crypto.KeyGenerator
-import javax.crypto.SecretKey
-import javax.crypto.spec.GCMParameterSpec
 
 /**
  * clientPIN の保存先 (DD-06 §3.4、DD-07 §7)。`LEFT(SHA-256(PIN), 16)` と残りの試行回数を、Keystore の AES-256-GCM 鍵
- * (`tcsecuritykeyemulator_pin_v1`、ユーザー認証不要) で暗号化して `files/pin.bin` に保存する。
+ * (`tcsecuritykeyemulator_pin_v1`、ユーザー認証不要) で暗号化して `files/pin.bin` に保存する ([KeystoreEncryptedFile])。
  *
  * - ファイルがなければ未設定。ファイルがあるのに読めなければ UNAVAILABLE とし、上書きしない ([clear] による初期化のみ可能)
  * - 試行回数は照合の前に減らして保存する (保存できなければ照合しない)。一致した後の回復の保存に失敗した場合は、
@@ -37,7 +27,7 @@ import javax.crypto.spec.GCMParameterSpec
 class KeystorePinStore(context: Context) : PinStore {
     private data class Record(val pinHash: ByteArray, val retries: Int)
 
-    private val file = AtomicFile(File(context.applicationContext.filesDir, FILE_NAME))
+    private val file = KeystoreEncryptedFile(context.applicationContext.filesDir, FILE_NAME, KEY_ALIAS, "PIN")
     private var loaded = false
     private var record: Record? = null
     private var error: String? = null
@@ -92,8 +82,8 @@ class KeystorePinStore(context: Context) : PinStore {
     /** PIN を消す。読み込めない状態からの初期化にも使う (暗号鍵も作り直す)。 */
     @Synchronized
     override fun clear() {
-        file.delete()
-        runCatching { keyStore().deleteEntry(KEY_ALIAS) }
+        file.deleteFile()
+        file.deleteKey()
         record = null
         error = null
         loaded = true
@@ -138,17 +128,9 @@ class KeystorePinStore(context: Context) : PinStore {
     }
 
     private fun read(): Record? {
-        val bytes = try {
-            file.readFully()
-        } catch (e: FileNotFoundException) {
-            return null
-        }
-        if (bytes.size <= IV_LENGTH) throw IOException("PIN file is truncated")
-        val key = existingKey() ?: throw IOException("PIN key is missing")
+        val bytes = file.read() ?: return null
         return try {
-            val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, bytes.copyOfRange(0, IV_LENGTH)))
-            val json = JSONObject(String(cipher.doFinal(bytes, IV_LENGTH, bytes.size - IV_LENGTH), Charsets.UTF_8))
+            val json = JSONObject(String(bytes, Charsets.UTF_8))
             val hash = Hex.decode(json.getString("hash"))
             val retries = json.getInt("retries")
             if (hash.size != 16 || retries !in 0..PinStore.MAX_RETRIES) throw IOException("PIN file is invalid")
@@ -162,44 +144,12 @@ class KeystorePinStore(context: Context) : PinStore {
 
     private fun write(r: Record) {
         val json = JSONObject().put("hash", Hex.encode(r.pinHash)).put("retries", r.retries)
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.ENCRYPT_MODE, key())
-        val iv = cipher.iv
-        check(iv.size == IV_LENGTH) { "unexpected IV length" }
-        val encrypted = cipher.doFinal(json.toString().toByteArray(Charsets.UTF_8))
-        val out = file.startWrite()
-        try {
-            out.write(iv)
-            out.write(encrypted)
-            file.finishWrite(out)
-        } catch (e: Exception) {
-            file.failWrite(out)
-            throw e
-        }
-    }
-
-    private fun keyStore(): KeyStore = KeyStore.getInstance(MetadataStore.ANDROID_KEYSTORE).apply { load(null) }
-
-    private fun existingKey(): SecretKey? = keyStore().getKey(KEY_ALIAS, null) as? SecretKey
-
-    private fun key(): SecretKey {
-        existingKey()?.let { return it }
-        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, MetadataStore.ANDROID_KEYSTORE)
-        generator.init(
-            KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                .setKeySize(256)
-                .build()
-        )
-        return generator.generateKey()
+        file.write(json.toString().toByteArray(Charsets.UTF_8))
     }
 
     companion object {
         /** PIN の暗号鍵のエイリアス (変更しない識別子)。 */
         const val KEY_ALIAS = "tcsecuritykeyemulator_pin_v1"
         private const val FILE_NAME = "pin.bin"
-        private const val TRANSFORMATION = "AES/GCM/NoPadding"
-        private const val IV_LENGTH = 12
     }
 }

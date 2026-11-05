@@ -4,7 +4,6 @@
 package net.tecogonaz.tcsecuritykeyemulator.fido.ctap2
 
 import net.tecogonaz.tcsecuritykeyemulator.fido.cbor.Cbor
-import net.tecogonaz.tcsecuritykeyemulator.fido.cbor.has
 
 /**
  * authenticatorCredentialManagement (0x0A。CTAP 2.1 §6.8、DD-01 §12.4)。discoverable credential の列挙・削除・更新を行う。
@@ -48,8 +47,7 @@ class CredentialManagement(
         raw: Map<Any?, ByteArray>,
         authorize: (AuthorizationRequest) -> AuthorizationResult.Granted
     ): Map<Long, Any>? {
-        if (!p.has(KEY_SUB_COMMAND)) throw CtapException(CtapStatus.ERR_MISSING_PARAMETER, "subCommand is missing")
-        val subCommand = p[KEY_SUB_COMMAND] as? Long ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
+        val subCommand = p.requireLong(KEY_SUB_COMMAND)
         val previous = state
         state = null
         return when (subCommand) {
@@ -67,21 +65,9 @@ class CredentialManagement(
         subCommand: Long,
         authorize: (AuthorizationRequest) -> AuthorizationResult.Granted
     ): Map<Long, Any>? {
-        val params = if (p.has(KEY_SUB_COMMAND_PARAMS)) {
-            p[KEY_SUB_COMMAND_PARAMS] as? Map<*, *> ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-        } else {
-            null
-        }
-        val version = if (p.has(KEY_PIN_UV_AUTH_PROTOCOL)) {
-            p[KEY_PIN_UV_AUTH_PROTOCOL] as? Long ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-        } else {
-            null
-        }
-        val param = if (p.has(KEY_PIN_UV_AUTH_PARAM)) {
-            p[KEY_PIN_UV_AUTH_PARAM] as? ByteArray ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-        } else {
-            null
-        }
+        val params = p.optMap(KEY_SUB_COMMAND_PARAMS)
+        val version = p.optLong(KEY_PIN_UV_AUTH_PROTOCOL)
+        val param = p.optBytes(KEY_PIN_UV_AUTH_PARAM)
         // 認証対象: サブコマンド (1 バイト) ‖ subCommandParams の受信したバイト列 (パラメータを持つサブコマンドのみ)。
         // 再エンコードすると、canonical でない CBOR を送るクライアントの署名と一致しないため、受信したバイト列を使う。
         val takesParams = subCommand == SUB_ENUMERATE_CREDENTIALS_BEGIN || subCommand == SUB_DELETE_CREDENTIAL ||
@@ -128,9 +114,8 @@ class CredentialManagement(
                 }
                 SUB_UPDATE_USER_INFORMATION -> {
                     val credential = findCredential(params!!, boundRpId)
-                    if (!params.has(PARAM_USER)) throw CtapException(CtapStatus.ERR_MISSING_PARAMETER, "user is missing")
-                    val user = params[PARAM_USER] as? Map<*, *> ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-                    val userId = user["id"] as? ByteArray ?: throw CtapException(CtapStatus.ERR_MISSING_PARAMETER, "user.id is missing")
+                    val user = params.requireMap(PARAM_USER)
+                    val userId = user.requireBytes("id")
                     if (!userId.contentEquals(credential.user.id)) {
                         throw CtapException(CtapStatus.ERR_INVALID_PARAMETER, "user.id does not match the credential")
                     }
@@ -182,9 +167,7 @@ class CredentialManagement(
     }
 
     private fun findCredential(params: Map<*, *>, boundRpId: String?): StoredCredential {
-        if (!params.has(PARAM_CREDENTIAL_ID)) throw CtapException(CtapStatus.ERR_MISSING_PARAMETER, "credentialId is missing")
-        val descriptor = params[PARAM_CREDENTIAL_ID] as? Map<*, *> ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-        val id = descriptor["id"] as? ByteArray ?: throw CtapException(CtapStatus.ERR_MISSING_PARAMETER, "credentialId.id is missing")
+        val id = params.requireMap(PARAM_CREDENTIAL_ID).requireBytes("id")
         val credential = discoverable().firstOrNull { it.id.contentEquals(id) }
             ?: throw CtapException(CtapStatus.ERR_NO_CREDENTIALS)
         if (boundRpId != null && boundRpId != credential.rpId) throw CtapException(CtapStatus.ERR_PIN_AUTH_INVALID, "rpId mismatch")
@@ -196,14 +179,6 @@ class CredentialManagement(
     private fun requireNoRpId(boundRpId: String?) {
         if (boundRpId != null) throw CtapException(CtapStatus.ERR_PIN_AUTH_INVALID, "token is bound to an rpId")
     }
-
-    private fun Map<*, *>.requireBytes(key: Long): ByteArray {
-        if (!has(key)) throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
-        return this[key] as? ByteArray ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-    }
-
-    private fun Map<*, *>.optText(key: String): String? =
-        if (!has(key)) null else this[key] as? String ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
 
     companion object {
         const val KEY_SUB_COMMAND: Long = 0x01

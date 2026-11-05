@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-10 |
-| 版数 | 1.8 |
+| 版数 | 1.9 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.9 (2026-11-05): コードレビュー (2026-11-05) の指摘への対応 (重複の整理)。UT-174 を追加 |
 | 改訂 | 1.8 (2026-11-05): コードレビュー (2026-11-05) の指摘への対応の単体テスト (UT-168〜173) を追加 |
 | 改訂 | 1.7 (2026-11-05): clientPIN の単体テスト (UT-157〜167)、CT-09、IT-36・IT-37 を追加。UT-10・UT-123・CT-07 を更新 |
 | 改訂 | 1.6 (2026-11-05): CTAP 2.1 の単体テスト (UT-132〜156)、CT-07・CT-08 を追加。UT-10・UT-123・UT-128・CT-01・§4 を更新 |
@@ -17,7 +18,7 @@
 
 ## 1. 単体テスト (UT)
 
-実行: `./gradlew :fido-core:test testDebugUnitTest` (計 173 件: fido-core 169 件、app 4 件。うち UT-107・UT-156 は環境変数指定時のみ実行。2026-11-05 時点で全件成功)
+実行: `./gradlew :fido-core:test testDebugUnitTest` (計 174 件: fido-core 170 件、app 4 件。うち UT-107・UT-156 は環境変数指定時のみ実行。2026-11-05 時点で全件成功)
 
 ### 1.1 CBOR (`CborTest`)
 
@@ -253,6 +254,7 @@
 | UT-154 | everyOperationIsAuthorizedByTheGateWithoutConsumption | 認証付きのサブコマンドごとに `CREDENTIAL_MANAGEMENT` の認可を求め、消費しない。続きは認可を求めない。拒否で `0x27` | FR-24, FR-13 |
 | UT-155 | enumeratingWithNoCredentialsReturnsNoCredentials | credential がなければ RP の列挙は `0x2E`、件数は 0 | FR-24 |
 | UT-171 | pinUvAuthParamCoversTheReceivedBytesEvenWhenTheyAreNotCanonical | キー順序が canonical でない subCommandParams でも、受信バイト列の HMAC で検証が通る | FR-24 |
+| UT-174 | wronglyTypedIdsAreUnexpectedTypeNotMissing | 型の不正な user.id・credentialID.id は `0x11`、id の欠落は `0x14` (共通の取得関数による統一) | FR-24, SEC-10 |
 
 ### 1.16 高水準のクライアントとの照合 (`InteropServer`)
 
@@ -384,10 +386,10 @@ UV 必須の登録・認証が成功する (2026-11-05、CT-07)。
 | FR-21 | UT-10, 107, 123〜131, 156, CT-05〜08 |
 | FR-22 | UT-10, 132〜140, 156, 168, CT-07, CT-08 |
 | FR-23 | UT-10, 141〜146, 150, CT-07, CT-08 |
-| FR-24 | UT-10, 147〜155, 159, 171, 172, CT-07, CT-08 |
+| FR-24 | UT-10, 147〜155, 159, 171, 172, 174, CT-07, CT-08 |
 | FR-25 | UT-10, 157〜170, CT-07, CT-09, IT-37 |
 | FR-26 | CT-09, IT-36 |
 | NFR-03 / 04 / 07 / 09 / 10 | IT-22 / IT-15 / IT-20 / IT-21, 30 / IT-19 |
 | (品質: アクセシビリティ) | IT-29 |
 | SEC-02〜SEC-04 | UT-17, 26, 64, 65, 75, 77〜79, 81, 85, 133, 135, 139, 151, IT-07, 08, 11, 16, 24, 25 |
-| SEC-07 / SEC-09 / SEC-10 | IT-18 / IT-10, 12, 13, 36 / UT-05〜07, 09, 22, 36, 38, 40〜42, 48, 49, 54, 84, 92〜94, 116, 120, 121, 123, 128, 134, 136, 148, 158, 167 |
+| SEC-07 / SEC-09 / SEC-10 | IT-18 / IT-10, 12, 13, 36 / UT-05〜07, 09, 22, 36, 38, 40〜42, 48, 49, 54, 84, 92〜94, 116, 120, 121, 123, 128, 134, 136, 148, 158, 167, 172, 174 |

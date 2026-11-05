@@ -3,8 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 文書番号 | TCSKE-DD-06 |
-| 版数 | 1.6 |
+| 版数 | 1.7 |
 | 作成日 | 2026-11-02 |
+| 改訂 | 1.7 (2026-11-05): コードレビュー (2026-11-05) の指摘への対応 (重複の整理)。暗号化ファイルの処理を `KeystoreEncryptedFile` に共通化 (形式は変更なし) |
 | 改訂 | 1.6 (2026-11-05): コードレビュー (2026-11-05) の指摘への対応 (作成日時の単調性) |
 | 改訂 | 1.5 (2026-11-05): clientPIN の保存 (`pin.bin`、§3.4) を追加。§5 に `fido_hmac_`・PIN の暗号鍵を追加し、全削除でメタデータ暗号鍵も削除する記述に訂正 |
 | 改訂 | 1.4 (2026-11-05): `credProtect` 項目を追加。credentialManagement によるユーザー情報の更新を追記 |
@@ -65,6 +66,7 @@ root / file / database / sharedpref / external をすべて除外。
 | 0 | 12 | GCM IV (Keystore が生成) |
 | 12 | 可変 | AES-256-GCM 暗号文 ‖ 認証タグ (128 bit) |
 
+- 読み書きは `KeystoreEncryptedFile` (PIN ファイル §3.4 と共通。エイリアスとファイル名だけが異なる)。
 - 暗号鍵: Keystore エイリアス `tcsecuritykeyemulator_metadata_v1`、`PURPOSE_ENCRYPT | PURPOSE_DECRYPT`、GCM / NoPadding、ユーザー認証不要 (一覧表示のため)。
 - 書き込みは `AtomicFile` による原子的な置き換え。変更 (作成・削除・カウンタ更新) の都度、全件を書き直す。
 - 読み込み失敗 (ファイルなし・復号失敗) は 0 件として扱う。

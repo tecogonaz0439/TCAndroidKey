@@ -268,15 +268,22 @@ class ClientPin(
         }
     }
 
-    /** 受付ゲートの許可を得て [block] を実行し、ワンタイムを消費せずに完了する。 */
+    /**
+     * 受付ゲートの許可を得て [block] を実行し、ワンタイムを消費せずに完了する (トークンの発行・PIN の設定と変更)。
+     * [requireUserVerification] の場合 (内蔵 UV によるトークン)、UV を伴わない許可は `0x3F UV_INVALID`。
+     */
     private fun <T> withAuthorization(
         operation: CtapOperation,
         rpId: String?,
         authorize: (AuthorizationRequest) -> AuthorizationResult.Granted,
+        requireUserVerification: Boolean = false,
         block: (AuthorizationLease) -> T
     ): T {
-        val grant = authorize(AuthorizationRequest(operation, rpId, null, false, false))
+        val grant = authorize(AuthorizationRequest(operation, rpId, null, false, requireUserVerification))
         try {
+            if (requireUserVerification && !grant.userVerified) {
+                throw CtapException(CtapStatus.ERR_UV_INVALID, "user verification was not performed")
+            }
             if (!grant.lease.isValid()) throw CtapException(CtapStatus.ERR_OPERATION_DENIED, "authorization revoked")
             return block(grant.lease)
         } finally {
@@ -297,19 +304,14 @@ class ClientPin(
         checkPermissions(requested)
         val sharedSecret = sharedSecret(protocol, keyAgreement)
 
-        val grant = authorize(AuthorizationRequest(CtapOperation.PIN_UV_AUTH_TOKEN, rpId, null, false, true))
-        try {
-            if (!grant.userVerified) throw CtapException(CtapStatus.ERR_UV_INVALID, "user verification was not performed")
-            if (!grant.lease.isValid()) throw CtapException(CtapStatus.ERR_OPERATION_DENIED, "authorization revoked")
+        // トークンの発行はワンタイムの受付を消費しない (登録・認証の時点で消費する)
+        return withAuthorization(CtapOperation.PIN_UV_AUTH_TOKEN, rpId, authorize, requireUserVerification = true) { lease ->
             resetTokens()
-            beginUsing(grant.lease)
+            beginUsing(lease)
             // 未定義のビットは無視する (CTAP 2.1 §6.5.5.7)
             permissions = (requested and KNOWN_PERMISSIONS).toInt()
             permissionsRpId = rpId
-            return linkedMapOf(RESP_PIN_UV_AUTH_TOKEN to protocol.encrypt(sharedSecret, tokens.getValue(protocol.version)))
-        } finally {
-            // トークンの発行はワンタイムの受付を消費しない (登録・認証の時点で消費する)
-            grant.lease.complete(consumed = false)
+            linkedMapOf(RESP_PIN_UV_AUTH_TOKEN to protocol.encrypt(sharedSecret, tokens.getValue(protocol.version)))
         }
     }
 
@@ -395,24 +397,6 @@ class ClientPin(
 
     private fun newTokens(): Map<Int, ByteArray> =
         supportedProtocols.associateWith { ByteArray(TOKEN_LENGTH).also { b -> random.nextBytes(b) } }
-
-    private fun Map<*, *>.requireLong(key: Long): Long {
-        if (!has(key)) throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
-        return this[key] as? Long ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-    }
-
-    private fun Map<*, *>.requireBytes(key: Long): ByteArray {
-        if (!has(key)) throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
-        return this[key] as? ByteArray ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-    }
-
-    private fun Map<*, *>.requireMap(key: Long): Map<*, *> {
-        if (!has(key)) throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
-        return this[key] as? Map<*, *> ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-    }
-
-    private fun Map<*, *>.optText(key: Long): String? =
-        if (!has(key)) null else this[key] as? String ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
 
     companion object {
         /** GetInfo の pinUvAuthProtocols (0x06) に広告するプロトコル (優先順)。 */

@@ -3,9 +3,6 @@
 
 package net.tecogonaz.tcsecuritykeyemulator.keystore
 
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
-import android.util.AtomicFile
 import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.CredProtect
 import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.Hex
 import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.KeySecurityLevel
@@ -14,18 +11,12 @@ import net.tecogonaz.tcsecuritykeyemulator.fido.ctap2.UserEntity
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.io.FileNotFoundException
 import java.io.IOException
-import java.security.KeyStore
-import javax.crypto.Cipher
-import javax.crypto.KeyGenerator
-import javax.crypto.SecretKey
-import javax.crypto.spec.GCMParameterSpec
 
 /**
  * クレデンシャルのメタデータ (RP ID・ユーザー名・署名カウンタ等) を暗号化して保存する。
  *
- * 暗号鍵は Android Keystore の AES-256-GCM 鍵 (ユーザー認証不要・端末外へ取り出し不可)。
+ * 暗号鍵は Android Keystore の AES-256-GCM 鍵 (ユーザー認証不要・端末外へ取り出し不可)。暗号化と保存は [KeystoreEncryptedFile]。
  * 秘密鍵そのものは Keystore 内にあり、このファイルには含まれない。
  *
  * AES-GCM により暗号文の改ざん・破損は検出するが、以前に保存した正当なファイルへの巻き戻しは検出しない。
@@ -33,24 +24,13 @@ import javax.crypto.spec.GCMParameterSpec
  * (呼び出し側は空のストアとして上書きしてはならない)。
  */
 internal class MetadataStore(directory: File) {
-    private val file = AtomicFile(File(directory, FILE_NAME))
+    private val file = KeystoreEncryptedFile(directory, FILE_NAME, KEY_ALIAS, "metadata")
 
     fun load(): List<StoredCredential> {
-        val bytes = try {
-            file.readFully()
-        } catch (e: FileNotFoundException) {
-            return emptyList()
-        }
-        if (bytes.size <= IV_LENGTH) throw IOException("metadata file is truncated (${bytes.size} bytes)")
+        val bytes = file.read() ?: return emptyList()
         return try {
-            val iv = bytes.copyOfRange(0, IV_LENGTH)
-            val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.DECRYPT_MODE, existingKey() ?: throw IOException("metadata key is missing"), GCMParameterSpec(128, iv))
-            val json = String(cipher.doFinal(bytes, IV_LENGTH, bytes.size - IV_LENGTH), Charsets.UTF_8)
-            val array = JSONArray(json)
+            val array = JSONArray(String(bytes, Charsets.UTF_8))
             (0 until array.length()).map { fromJson(array.getJSONObject(it)) }
-        } catch (e: IOException) {
-            throw e
         } catch (e: Exception) {
             throw IOException("metadata file cannot be read: ${e.javaClass.simpleName}", e)
         }
@@ -59,47 +39,16 @@ internal class MetadataStore(directory: File) {
     fun save(credentials: Collection<StoredCredential>) {
         val array = JSONArray()
         credentials.forEach { array.put(toJson(it)) }
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.ENCRYPT_MODE, key())
-        val iv = cipher.iv
-        check(iv.size == IV_LENGTH) { "unexpected IV length" }
-        val encrypted = cipher.doFinal(array.toString().toByteArray(Charsets.UTF_8))
-        val out = file.startWrite()
-        try {
-            out.write(iv)
-            out.write(encrypted)
-            file.finishWrite(out)
-        } catch (e: Exception) {
-            file.failWrite(out)
-            throw e
-        }
+        file.write(array.toString().toByteArray(Charsets.UTF_8))
     }
 
     fun deleteFile() {
-        file.delete()
+        file.deleteFile()
     }
 
     /** メタデータの暗号鍵を削除する (初期化用。次回の保存で新しい鍵を生成する)。 */
     fun deleteKey() {
-        runCatching { KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }.deleteEntry(KEY_ALIAS) }
-    }
-
-    private fun existingKey(): SecretKey? {
-        val ks = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-        return ks.getKey(KEY_ALIAS, null) as? SecretKey
-    }
-
-    private fun key(): SecretKey {
-        existingKey()?.let { return it }
-        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
-        generator.init(
-            KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                .setKeySize(256)
-                .build()
-        )
-        return generator.generateKey()
+        file.deleteKey()
     }
 
     private fun toJson(c: StoredCredential): JSONObject = JSONObject().apply {
@@ -145,10 +94,10 @@ internal class MetadataStore(directory: File) {
     private fun JSONObject.optStringOrNull(name: String): String? = if (has(name)) getString(name) else null
 
     companion object {
-        const val ANDROID_KEYSTORE = "AndroidKeyStore"
+        const val ANDROID_KEYSTORE = KeystoreEncryptedFile.ANDROID_KEYSTORE
+
+        /** メタデータの暗号鍵のエイリアスとファイル名 (変更しない識別子)。 */
         private const val KEY_ALIAS = "tcsecuritykeyemulator_metadata_v1"
         private const val FILE_NAME = "credentials.bin"
-        private const val TRANSFORMATION = "AES/GCM/NoPadding"
-        private const val IV_LENGTH = 12
     }
 }

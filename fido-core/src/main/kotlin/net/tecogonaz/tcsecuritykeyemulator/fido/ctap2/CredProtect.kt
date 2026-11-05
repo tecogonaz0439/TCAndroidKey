@@ -3,7 +3,6 @@
 
 package net.tecogonaz.tcsecuritykeyemulator.fido.ctap2
 
-import net.tecogonaz.tcsecuritykeyemulator.fido.cbor.has
 
 /** credProtect 拡張 (CTAP 2.1 §12.1、DD-01 §12.3)。 */
 object CredProtect {
@@ -23,8 +22,7 @@ object CredProtect {
      * 整数でなければ `0x11`、1〜3 以外は `0x02 INVALID_PARAMETER`。
      */
     fun requested(extensions: Map<*, *>?): Int? {
-        if (extensions == null || !extensions.has(ID)) return null
-        val value = extensions[ID] as? Long ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
+        val value = extensions?.optLong(ID) ?: return null
         if (value !in 1L..3L) throw CtapException(CtapStatus.ERR_INVALID_PARAMETER, "invalid credProtect level $value")
         return value.toInt()
     }

@@ -31,8 +31,7 @@ object HmacSecret {
 
     /** MakeCredential の extensions に `"hmac-secret": true` があるか。値が真偽値でなければ `0x11`。 */
     fun requested(extensions: Map<*, *>?): Boolean {
-        if (extensions == null || !extensions.has(ID)) return false
-        return extensions[ID] as? Boolean ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
+        return extensions?.optBool(ID) ?: false
     }
 
     /** GetAssertion の extensions に hmac-secret の入力があるか。 */
@@ -52,15 +51,11 @@ object HmacSecret {
      */
     fun parse(extensions: Map<*, *>?, clientPin: ClientPin): HmacSecretInput? {
         if (!present(extensions)) return null
-        val input = extensions!![ID] as? Map<*, *> ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-        val keyAgreement = input.require<Map<*, *>>(KEY_KEY_AGREEMENT)
-        val saltEnc = input.require<ByteArray>(KEY_SALT_ENC)
-        val saltAuth = input.require<ByteArray>(KEY_SALT_AUTH)
-        val version = if (input.has(KEY_PIN_UV_AUTH_PROTOCOL)) {
-            input[KEY_PIN_UV_AUTH_PROTOCOL] as? Long ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-        } else {
-            null
-        }
+        val input = extensions!!.requireMap(ID)
+        val keyAgreement = input.requireMap(KEY_KEY_AGREEMENT)
+        val saltEnc = input.requireBytes(KEY_SALT_ENC)
+        val saltAuth = input.requireBytes(KEY_SALT_AUTH)
+        val version = input.optLong(KEY_PIN_UV_AUTH_PROTOCOL)
         val protocol = clientPin.protocol(version, absentStatus = CtapStatus.ERR_PIN_AUTH_INVALID)
         val sharedSecret = clientPin.sharedSecret(protocol, keyAgreement)
         if (!protocol.verify(sharedSecret, saltEnc, saltAuth)) {
@@ -84,10 +79,5 @@ object HmacSecret {
     fun output(input: HmacSecretInput, credRandom: ByteArray): ByteArray {
         val outputs = input.salts.fold(ByteArray(0)) { acc, salt -> acc + Hkdf.hmacSha256(credRandom, salt) }
         return input.protocol.encrypt(input.sharedSecret, outputs)
-    }
-
-    private inline fun <reified T> Map<*, *>.require(key: Long): T {
-        if (!has(key)) throw CtapException(CtapStatus.ERR_MISSING_PARAMETER, "hmac-secret parameter $key is missing")
-        return this[key] as? T ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
     }
 }

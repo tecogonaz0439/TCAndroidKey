@@ -5,9 +5,6 @@ package net.tecogonaz.tcsecuritykeyemulator.fido.ctap2
 
 import net.tecogonaz.tcsecuritykeyemulator.fido.cbor.Cbor
 import net.tecogonaz.tcsecuritykeyemulator.fido.cbor.CborException
-import net.tecogonaz.tcsecuritykeyemulator.fido.cbor.bytes
-import net.tecogonaz.tcsecuritykeyemulator.fido.cbor.has
-import net.tecogonaz.tcsecuritykeyemulator.fido.cbor.list
 import net.tecogonaz.tcsecuritykeyemulator.fido.cbor.map
 import net.tecogonaz.tcsecuritykeyemulator.fido.cbor.text
 import java.io.ByteArrayOutputStream
@@ -186,22 +183,22 @@ class Ctap2Authenticator(
     private fun makeCredential(p: Map<*, *>, keepAlive: KeepAlive): Map<Long, Any> {
         val config = configProvider()
         val clientDataHash = requireClientDataHash(p, 1)
-        val rp = requireMap(p, 2)
-        val userMap = requireMap(p, 3)
-        val credParams = requireList(p, 4)
+        val rp = p.requireMap(2)
+        val userMap = p.requireMap(3)
+        val credParams = p.requireList(4)
 
-        val rpId = rp.typedText("id") ?: throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
-        val rpName = rp.typedText("name")
-        val userId = userMap.typedBytes("id") ?: throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
+        val rpId = rp.requireText("id")
+        val rpName = rp.optText("name")
+        val userId = userMap.requireBytes("id")
         if (userId.isEmpty() || userId.size > 64) throw CtapException(CtapStatus.ERR_INVALID_PARAMETER)
-        val user = UserEntity(userId, userMap.typedText("name"), userMap.typedText("displayName"))
+        val user = UserEntity(userId, userMap.optText("name"), userMap.optText("displayName"))
 
         // pubKeyCredParams の構造 (型) は先に検証し、対応アルゴリズムの有無は excludeList の後で判定する。
         var es256 = false
         for (param in credParams) {
             val m = param as? Map<*, *> ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-            val type = m.typedText("type") ?: throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
-            val alg = m["alg"] as? Long ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
+            val type = m.requireText("type")
+            val alg = m.requireLong("alg")
             if (type == "public-key" && alg == CoseAlgorithm.ES256) es256 = true
         }
 
@@ -211,11 +208,11 @@ class Ctap2Authenticator(
         val hmacSecret = HmacSecret.requested(extensions)
         val credProtect = CredProtect.requested(extensions)
         val options = p.optMap(7)
-        val rk = options.option("rk") ?: false
-        val uv = options.option("uv") ?: false
-        val upOption = options.option("up")
+        val rk = options?.optBool("rk") ?: false
+        val uv = options?.optBool("uv") ?: false
+        val upOption = options?.optBool("up")
         val pinUvAuthParam = p.optBytes(8)
-        val pinUvAuthProtocol = p.optInt(9)
+        val pinUvAuthProtocol = p.optLong(9)
 
         val request = AuthorizationRequest(CtapOperation.MAKE_CREDENTIAL, rpId, user.name, true, uv)
 
@@ -289,7 +286,7 @@ class Ctap2Authenticator(
     // ------------------------------------------------------------------ GetAssertion
 
     private fun getAssertion(p: Map<*, *>, keepAlive: KeepAlive, channel: Int): Map<Long, Any> {
-        val rpId = p.typedText(1) ?: throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
+        val rpId = p.requireText(1)
         val clientDataHash = requireClientDataHash(p, 2)
         // 空でない allowList が指定された場合は、対応する type の ID が 0 件でもそのリストに限定する
         // (discoverable credential の検索には切り替えない)。
@@ -298,11 +295,11 @@ class Ctap2Authenticator(
         val allowIds = credentialIds(rawAllowList)
         val extensions = p.optMap(4)
         val options = p.optMap(5)
-        if (options.option("rk") != null) throw CtapException(CtapStatus.ERR_INVALID_OPTION)
-        val up = options.option("up") ?: true
-        val uv = options.option("uv") ?: false
+        if (options?.optBool("rk") != null) throw CtapException(CtapStatus.ERR_INVALID_OPTION)
+        val up = options?.optBool("up") ?: true
+        val uv = options?.optBool("uv") ?: false
         val pinUvAuthParam = p.optBytes(6)
-        val pinUvAuthProtocol = p.optInt(7)
+        val pinUvAuthProtocol = p.optLong(7)
         // hmac-secret は UP を伴う認証でのみ使える (CTAP 2.1 §12.5)。入力の検証・salt の復号は認可の前に行う。
         if (HmacSecret.present(extensions) && !up) throw CtapException(CtapStatus.ERR_UNSUPPORTED_OPTION)
         val hmacSecret = HmacSecret.parse(extensions, clientPin)
@@ -537,57 +534,19 @@ class Ctap2Authenticator(
         if (list == null) return emptyList()
         return list.mapNotNull { item ->
             val m = item as? Map<*, *> ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-            val type = m.typedText("type") ?: throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
-            val id = m.typedBytes("id") ?: throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
+            val type = m.requireText("type")
+            val id = m.requireBytes("id")
             if (type == "public-key") id else null
         }
     }
 
     /** clientDataHash は SHA-256 (32 バイト)。 */
     private fun requireClientDataHash(p: Map<*, *>, key: Int): ByteArray {
-        val hash = requireBytes(p, key)
+        val hash = p.requireBytes(key)
         if (hash.size != CLIENT_DATA_HASH_LENGTH) {
             throw CtapException(CtapStatus.ERR_INVALID_LENGTH, "clientDataHash must be 32 bytes")
         }
         return hash
-    }
-
-    private fun requireBytes(p: Map<*, *>, key: Int): ByteArray {
-        if (!p.has(key)) throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
-        return p.bytes(key) ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-    }
-
-    private fun requireMap(p: Map<*, *>, key: Int): Map<*, *> {
-        if (!p.has(key)) throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
-        return p.map(key) ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-    }
-
-    private fun requireList(p: Map<*, *>, key: Int): List<*> {
-        if (!p.has(key)) throw CtapException(CtapStatus.ERR_MISSING_PARAMETER)
-        return p.list(key) ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-    }
-
-    private fun Map<*, *>.optList(key: Int): List<*>? =
-        if (!has(key)) null else list(key) ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-
-    private fun Map<*, *>.optMap(key: Int): Map<*, *>? =
-        if (!has(key)) null else map(key) ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-
-    private fun Map<*, *>.optInt(key: Int): Long? =
-        if (!has(key)) null else this[key.toLong()] as? Long ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-
-    private fun Map<*, *>.optBytes(key: Int): ByteArray? =
-        if (!has(key)) null else bytes(key) ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-
-    private fun Map<*, *>.typedText(key: Any): String? =
-        if (!has(key)) null else text(key) ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-
-    private fun Map<*, *>.typedBytes(key: Any): ByteArray? =
-        if (!has(key)) null else bytes(key) ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
-
-    private fun Map<*, *>?.option(name: String): Boolean? {
-        if (this == null || !has(name)) return null
-        return this[name] as? Boolean ?: throw CtapException(CtapStatus.ERR_CBOR_UNEXPECTED_TYPE)
     }
 
     companion object {
